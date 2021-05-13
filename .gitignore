@@ -1,4 +1,4 @@
-*.py[co]
+*.py[cod]
 *.sw[op]
 *~
 .coverage
@@ -10,7 +10,7 @@ build
 cover
 dist
 docs/_build
-lib/PyLD.egg-info
+*.egg-info
 profiler
 tests/test_caching.py
 tests/data/test_caching.json

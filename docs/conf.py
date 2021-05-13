@@ -22,7 +22,7 @@ current_path = os.path.abspath(os.path.dirname(__file__))
 path = os.path.join(current_path, '..')
 
 sys.path[0:0] = [
-    os.path.join(path, 'lib'),
+    os.path.join(path, 'src'),
 ]
 
 # -- General configuration -----------------------------------------------------

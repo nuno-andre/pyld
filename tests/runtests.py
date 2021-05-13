@@ -19,7 +19,7 @@ import re
 from argparse import ArgumentParser
 from unittest import TextTestResult
 
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', 'lib'))
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', 'src'))
 from pyld import jsonld
 
 __copyright__ = 'Copyright (c) 2011-2013 Digital Bazaar, Inc.'
@@ -587,7 +587,7 @@ class EarlReport():
     def __init__(self):
         about = {}
         with open(os.path.join(
-                os.path.dirname(__file__), '..', 'lib', 'pyld', '__about__.py')) as fp:
+                os.path.dirname(__file__), '..', 'src', 'pyld', '__about__.py')) as fp:
             exec(fp.read(), about)
         self.now = datetime.datetime.utcnow().replace(microsecond=0)
         self.report = {
