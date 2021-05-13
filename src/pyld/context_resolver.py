@@ -10,7 +10,6 @@ Context Resolver for managing remote contexts.
 
 from c14n.Canonicalize import canonicalize
 from .types import Mapping
-from .jsonld import prepend_base, load_document
 from .resolved_context import ResolvedContext
 from .exceptions import JsonLdSyntaxError, ContextUrlError, InvalidUrl
 from .const import MAX_CONTEXT_URLS
@@ -104,6 +103,8 @@ class ContextResolver:
         return resolved
 
     def _resolve_remote_context(self, active_ctx, url, base, cycles):
+        from .jsonld import prepend_base
+
         # resolve relative URL and fetch context
         url = prepend_base(base, url)
         context, remote_doc = self._fetch_context(active_ctx, url, cycles)
@@ -118,6 +119,8 @@ class ContextResolver:
         return resolved
 
     def _fetch_context(self, active_ctx, url, cycles):
+        from .jsonld import load_document
+
         # check for max context URLs fetched during a resolve operation
         if len(cycles) > MAX_CONTEXT_URLS:
             raise ContextUrlError(
@@ -188,6 +191,8 @@ class ContextResolver:
         :param context: the context.
         :param base: the base IRI to use to resolve relative IRIs.
         """
+        from .jsonld import prepend_base
+
         if not isinstance(context, Mapping):
             return
 

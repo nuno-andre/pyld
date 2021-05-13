@@ -20,7 +20,8 @@ from argparse import ArgumentParser
 from unittest import TextTestResult
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', 'src'))
-from pyld import jsonld
+from pyld import jsonld, parse  # noqa: E402
+
 
 __copyright__ = 'Copyright (c) 2011-2013 Digital Bazaar, Inc.'
 __license__ = 'New BSD license'
@@ -34,6 +35,7 @@ LOCAL_BASES = [
     'https://w3c.github.io/json-ld-framing/tests',
     'https://github.com/json-ld/normalization/tests'
 ]
+
 
 class TestRunner(unittest.TextTestRunner):
     """
@@ -56,20 +58,26 @@ class TestRunner(unittest.TextTestRunner):
         print('Use -h or --help to view options.\n')
 
         # add program options
-        self.parser.add_argument('tests', metavar='TEST', nargs='*',
+        self.parser.add_argument(
+            'tests', metavar='TEST', nargs='*',
             help='A manifest or directory to test')
-        self.parser.add_argument('-e', '--earl', dest='earl',
+        self.parser.add_argument(
+            '-e', '--earl', dest='earl',
             help='The filename to write an EARL report to')
-        self.parser.add_argument('-b', '--bail', dest='bail',
+        self.parser.add_argument(
+            '-b', '--bail', dest='bail',
             action='store_true', default=False,
             help='Bail out as soon as any test fails')
-        self.parser.add_argument('-l', '--loader', dest='loader',
+        self.parser.add_argument(
+            '-l', '--loader', dest='loader',
             default='sync',
             help='The remote URL document loader: sync, async '
                  '[default: %(default)s]')
-        self.parser.add_argument('-n', '--number', dest='number',
+        self.parser.add_argument(
+            '-n', '--number', dest='number',
             help='Limit tests to those containing the specified test identifier')
-        self.parser.add_argument('-v', '--verbose', dest='verbose',
+        self.parser.add_argument(
+            '-v', '--verbose', dest='verbose',
             action='store_true', default=False,
             help='Print verbose test data')
 
@@ -88,7 +96,7 @@ class TestRunner(unittest.TextTestRunner):
         # Global for saving test numbers to focus on
         global ONLY_IDENTIFIER
         if self.options.number:
-          ONLY_IDENTIFIER = self.options.number
+            ONLY_IDENTIFIER = self.options.number
 
         if len(self.options.tests):
             # tests given on command line
@@ -127,7 +135,7 @@ class TestRunner(unittest.TextTestRunner):
                 root, ext = os.path.splitext(test)
                 if ext in ['.json', '.jsonld']:
                     root_manifest['sequence'].append(os.path.abspath(test))
-                    #root_manifest['sequence'].append(test)
+                    # root_manifest['sequence'].append(test)
                 else:
                     raise Exception('Unknown test file ext', root, ext)
             elif os.path.isdir(test):
@@ -141,7 +149,7 @@ class TestRunner(unittest.TextTestRunner):
 
         # load root manifest
         global ROOT_MANIFEST_DIR
-        #ROOT_MANIFEST_DIR = os.path.dirname(root_manifest['filename'])
+        # ROOT_MANIFEST_DIR = os.path.dirname(root_manifest['filename'])
         ROOT_MANIFEST_DIR = root_manifest['filename']
         suite = Manifest(root_manifest, root_manifest['filename']).load()
 
@@ -201,7 +209,7 @@ class Manifest:
 class Test(unittest.TestCase):
     def __init__(self, manifest, data, filename):
         unittest.TestCase.__init__(self)
-        #self.maxDiff = None
+        # self.maxDiff = None
         self.manifest = manifest
         self.data = data
         self.filename = filename
@@ -259,8 +267,10 @@ class Test(unittest.TestCase):
         # expand @id and input base
         if 'baseIri' in manifest.data:
             data['@id'] = (
-                manifest.data['baseIri'] +
-                os.path.basename(str.replace(manifest.filename, '.jsonld', '')) + data['@id'])
+                manifest.data['baseIri']
+                + os.path.basename(str.replace(manifest.filename, '.jsonld', ''))
+                + data['@id']
+            )
             self.base = self.manifest.data['baseIri'] + data['input']
 
         # skip based on id regular expression
@@ -353,8 +363,8 @@ class Test(unittest.TestCase):
                 raise AssertionError('pending positive test passed')
         except AssertionError as e:
             if e.args[0] == 'pending positive test passed':
-              print(e)
-              raise e
+                print(e)
+                raise e
             elif not self.is_negative and not self.pending:
                 print('\nEXPECTED: ', json.dumps(expect, indent=2))
                 print('ACTUAL: ', json.dumps(result, indent=2))
@@ -377,19 +387,25 @@ class Test(unittest.TestCase):
             elif self.pending:
                 print('pending')
             else:
-                #import pdb; pdb.set_trace()
+                # import pdb; pdb.set_trace()
                 self.assertEqual(result, expect)
+
 
 # Compare values with order-insensitive array tests
 def equalUnordered(result, expect):
     if isinstance(result, list) and isinstance(expect, list):
-        return(len(result) == len(expect) and
-            all(any(equalUnordered(v1, v2) for v2 in expect) for v1 in result))
+        return(
+            len(result) == len(expect) and
+            all(any(equalUnordered(v1, v2) for v2 in expect) for v1 in result)
+        )
     elif isinstance(result, dict) and isinstance(expect, dict):
-        return(len(result) == len(expect) and
-            all(k in expect and equalUnordered(v, expect[k]) for k, v in result.items()))
+        return(
+            len(result) == len(expect) and
+            all(k in expect and equalUnordered(v, expect[k]) for k, v in result.items())
+        )
     else:
         return(result == expect)
+
 
 def is_jsonld_type(node, type_):
     node_types = []
@@ -515,20 +531,21 @@ def create_document_loader(test):
                 link_header = options.get('httpLink', '')
                 if isinstance(link_header, list):
                     link_header = ','.join(link_header)
-                linked_context = jsonld.parse_link_header(
+                linked_context = parse.parse_link_header(
                     link_header).get('http://www.w3.org/ns/json-ld#context')
                 if linked_context and content_type != 'application/ld+json':
                     if isinstance(linked_context, list):
                         raise Exception('multiple context link headers')
                     doc['contextUrl'] = linked_context['target']
-                linked_alternate = jsonld.parse_link_header(
+                linked_alternate = parse.parse_link_header(
                     link_header).get('alternate')
                 # if not JSON-LD, alternate may point there
                 if (linked_alternate and
                         linked_alternate.get('type') == 'application/ld+json' and
                         not re.match(r'^application\/(\w*\+)?json$', content_type)):
                     doc['contentType'] = 'application/ld+json'
-                    doc['documentUrl'] = jsonld.prepend_base(url, linked_alternate['target'])
+                    doc['documentUrl'] = jsonld.prepend_base(
+                        url, linked_alternate['target'])
         global ROOT_MANIFEST_DIR
         if doc['documentUrl'].find(':') == -1:
             filename = os.path.join(ROOT_MANIFEST_DIR, doc['documentUrl'])
@@ -537,7 +554,7 @@ def create_document_loader(test):
             filename = test.dirname + strip_fragment(strip_base(doc['documentUrl']))
         try:
             doc['document'] = read_file(filename)
-        except:
+        except Exception:
             raise Exception('loading document failed')
         return doc
 
@@ -545,7 +562,7 @@ def create_document_loader(test):
         # always load remote-doc tests remotely
         # (some skipped due to lack of reasonable HTTP header support)
         if (test.manifest.data.get('name') == 'Remote document' and
-            not test.data.get('runLocal')):
+                not test.data.get('runLocal')):
             return loader(url)
 
         # always load non-base tests remotely
@@ -783,7 +800,7 @@ TEST_TYPES = {
                 '.*toRdf-manifest#te112$',
                 # number fixes
                 '.*toRdf-manifest#trt01$',
-                # type:none
+                # - type:none
                 '.*toRdf-manifest#ttn02$',
                 # well formed
                 '.*toRdf-manifest#twf05$',

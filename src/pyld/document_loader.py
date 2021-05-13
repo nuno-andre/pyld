@@ -10,7 +10,7 @@ Remote document loader.
 .. moduleauthor:: Olaf Conradi <olaf@conradi.org>
 .. moduleauthor:: Nuno André <mail@nunoand.re>
 """
-from typing import Any, Optional, Callable, AsyncCallable, Union
+from typing import Any, Optional, Callable, Union
 from urllib.parse import urlparse
 import string
 import re
@@ -18,11 +18,12 @@ import re
 from httpx import AsyncClient, Response, get as httpx_get
 
 from .exceptions import JsonLdError, InvalidUrl, LoadDocumentError
-from .jsonld import parse_link_header, LINK_HEADER_REL, prepend_base
+from .jsonld import prepend_base
+from .const import LINK_HEADER_REL
+from .parse import parse_link_header
 
 
-AnyCallable = Union[Callable, AsyncCallable]
-Loader = AnyCallable[str, dict[str, Any], dict[str, Any]]
+Loader = Callable[[str, dict[str, Any]], dict[str, Any]]
 
 __all__ = ['sync_document_loader', 'async_document_loader']
 

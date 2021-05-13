@@ -1,3 +1,4 @@
+from typing import NamedTuple, Optional
 from collections.abc import Mapping
 from functools import reduce
 
@@ -34,3 +35,11 @@ class frozendict(Mapping):
             self._hash = reduce(
                 lambda x, y: x ^ hash(y), self._dict.items(), 0)
         return self._hash
+
+
+class ParsedUrl(NamedTuple):
+    scheme: str
+    authority: Optional[str]
+    path: str
+    query: Optional[str]
+    fragment: Optional[str]

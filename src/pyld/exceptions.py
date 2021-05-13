@@ -42,13 +42,70 @@ class JsonLdSyntaxError(JsonLdException):
         super().__init__(message, details, code, cause)
 
 
-class LoadDocumentError(JsonLdException):
-    type = 'jsonld.LoadDocumentError'
+class CompactError(JsonLdException):
+    type = 'jsonld.CompactError'
 
 
 class ContextUrlError(JsonLdException):
     type = 'jsonld.ContextUrlError'
 
 
+class CyclicalContext(JsonLdException):
+    type = 'jsonld.CyclicalContext'
+
+
+class FlattenError(JsonLdException):
+    type = 'jsonld.FlattenError'
+
+
+class FrameError(JsonLdException):
+    type = 'jsonld.FrameError'
+
+
+class InvalidJsonLiteral(ValueError, JsonLdException):
+    type = 'jsonld.InvalidJsonLiteral'
+
+
 class InvalidUrl(JsonLdException):
     type = 'jsonld.InvalidUrl'
+
+
+class LoadDocumentError(JsonLdException):
+    type = 'jsonld.LoadDocumentError'
+
+
+class NormalizeError(JsonLdException):
+    type = 'jsonld.NormalizeError'
+
+
+class NullRemoteDocument(JsonLdException):
+    type = 'jsonld.NullRemoteDocument'
+
+    def __init__(self, details=None, code=None, cause=None):
+        msg = 'No remote document found at the given URL.'
+        super().__init__(msg, details=details, code=code, cause=cause)
+
+
+class ParseError(JsonLdException):
+    type = 'jsonld.ParseError'
+
+
+class ProcessingModeConflict(JsonLdException):
+    type = 'jsonld.ProcessingModeConflict'
+
+
+class RdfError(JsonLdException):
+    type = 'jsonld.RdfError'
+
+
+class UnknownFormat(JsonLdException):
+    type = 'jsonld.UnknownFormat'
+
+    def __init__(self, message, details=None, code=None, cause=None, format=None):
+        if format:
+            details = (details or {}).update({'format': format})
+        super().__init__(message, details=details, code=code, cause=cause)
+
+
+class UnsupportedVersion(JsonLdException):
+    type = 'jsonld.UnsupportedVersion'
