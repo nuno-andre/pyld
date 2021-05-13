@@ -32,7 +32,6 @@ setup(
     packages=[
         'c14n',
         'pyld',
-        'pyld.documentloader',
     ],
     package_dir={'': 'lib'},
     license='BSD 3-Clause license',
@@ -50,10 +49,6 @@ setup(
     install_requires=[
         'cachetools',
         'lxml',
-    ],
-    extras_require={
-        'requests': ['requests'],
-        'aiohttp': ['aiohttp'],
-        'cachetools': ['cachetools'],
-    }
+        'httpx',
+    ]
 )

@@ -12,8 +12,7 @@ sudo: false
 
 # Define document loaders
 env:
-  - LOADER=requests
-  - LOADER=aiohttp
+  - LOADER=httpx
 
 matrix:
   exclude:

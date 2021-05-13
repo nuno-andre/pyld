@@ -40,7 +40,7 @@ __all__ = [
     'compact', 'expand', 'flatten', 'frame', 'link', 'from_rdf', 'to_rdf',
     'normalize', 'set_document_loader', 'get_document_loader',
     'parse_link_header', 'load_document',
-    'requests_document_loader', 'aiohttp_document_loader',
+    'sync_document_loader', 'async_document_loader',
     'register_rdf_parser', 'unregister_rdf_parser',
     'JsonLdProcessor', 'JsonLdError', 'ContextResolver',
     'freeze'
@@ -382,40 +382,16 @@ def parse_link_header(header):
     return rval
 
 
-def dummy_document_loader(**kwargs):
-    """
-    Create a dummy document loader that will raise an exception on use.
+def sync_document_loader(**kwargs):
+    from .document_loader import sync_document_loader
 
-    :param **kwargs: extra keyword args
-
-    :return: the RemoteDocument loader function.
-    """
-
-    def loader(url, options):
-        """
-        Raises an exception on every call.
-
-        :param url: the URL to retrieve.
-
-        :return: the RemoteDocument.
-        """
-        raise JsonLdError('No default document loader configured',
-                          'jsonld.LoadDocumentError',
-                          {'url': url}, code='no default document loader')
-
-    return loader
+    return sync_document_loader(**kwargs)
 
 
-def requests_document_loader(**kwargs):
-    import pyld.documentloader.requests
+def async_document_loader(**kwargs):
+    from .document_loader import async_document_loader
 
-    return pyld.documentloader.requests.requests_document_loader(**kwargs)
-
-
-def aiohttp_document_loader(**kwargs):
-    import pyld.documentloader.aiohttp
-
-    return pyld.documentloader.aiohttp.aiohttp_document_loader(**kwargs)
+    return async_document_loader(**kwargs)
 
 
 def register_rdf_parser(content_type, parser):
@@ -6517,13 +6493,8 @@ def freeze(value):
     return value
 
 # The default JSON-LD document loader.
-try:
-    _default_document_loader = requests_document_loader()
-except ImportError:
-    try:
-        _default_document_loader = aiohttp_document_loader()
-    except (ImportError, SyntaxError):
-        _default_document_loader = dummy_document_loader()
+_default_document_loader = sync_document_loader()
+
 
 def load_document(url,
     options,

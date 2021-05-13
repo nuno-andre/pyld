@@ -60,22 +60,13 @@ Requirements
 ------------
 
 - Python_ (3.6 or later)
-- Requests_ (optional)
-- aiohttp_ (optional, Python 3.5 or later)
+
 
 Installation
 ------------
 
 PyLD can be installed with a pip_ `package <https://pypi.org/project/PyLD/>`_
 
-.. code-block:: bash
-
-    pip install PyLD
-
-Defining a dependency on pyld will not pull in Requests_ or aiohttp_.  If you
-need one of these for a `Document Loader`_ then either depend on the desired
-external library directly or define the requirement as ``PyLD[requests]`` or
-``PyLD[aiohttp]``.
 
 Quick Examples
 --------------
@@ -148,27 +139,25 @@ Quick Examples
 Document Loader
 ---------------
 
-The default document loader for PyLD uses Requests_. In a production
-environment you may want to setup a custom loader that, at a minimum, sets a
-timeout value. You can also force requests to use https, set client certs,
-disable verification, or set other Requests_ parameters.
+The default document loader for PyLD uses the httpx_ synchronous client. In a
+production environment you may want to setup a custom loader that, at a minimum,
+sets a timeout value. You can also force httpx to use https, set client certs,
+disable verification, or set other httpx_ parameters.
 
 .. code-block:: Python
 
-    jsonld.set_document_loader(jsonld.requests_document_loader(timeout=...))
+    jsonld.set_document_loader(jsonld.sync_document_loader(timeout=...))
 
-An asynchronous document loader using aiohttp_ is also available. Please note
-that this document loader limits asynchronicity to fetching documents only.
-The processing loops remain synchronous.
+An asynchronous document loader is also available. Please note that this
+document loader limits asynchronicity to fetching documents only. The processing
+loops remain synchronous.
 
 .. code-block:: Python
 
-    jsonld.set_document_loader(jsonld.aiohttp_document_loader(timeout=...))
+    jsonld.set_document_loader(jsonld.async_document_loader(timeout=...))
 
-When no document loader is specified, the default loader is set to Requests_.
-If Requests_ is not available, the loader is set to aiohttp_. The fallback
-document loader is a dummy document loader that raises an exception on every
-invocation.
+When no document loader is specified, the default loader is set to ``sync``.
+
 
 Commercial Support
 ------------------
@@ -213,8 +202,8 @@ directories as arguments:
 
     python tests/runtests.py TEST_PATH [TEST_PATH...]
 
-The test runner supports different document loaders by setting ``-l requests``
-or ``-l aiohttp``. The default document loader is set to Requests_.
+The test runner supports different document loaders by setting ``-l sync``
+or ``-l async``. The default document loader is set to ``sync``.
 
 An EARL report can be generated using the ``-e`` or ``--earl`` option.
 
@@ -235,8 +224,7 @@ An EARL report can be generated using the ``-e`` or ``--earl`` option.
 .. _Microdata: http://www.w3.org/TR/microdata/
 .. _Microformats: http://microformats.org/
 .. _Python: https://www.python.org/
-.. _Requests: http://docs.python-requests.org/
-.. _aiohttp: https://aiohttp.readthedocs.io/
+.. _httpx: https://github.com/encode/httpx
 .. _RDFa: http://www.w3.org/TR/rdfa-core/
 .. _RFC7159: http://tools.ietf.org/html/rfc7159
 .. _WG test suite: https://github.com/w3c/json-ld-api/tree/master/tests

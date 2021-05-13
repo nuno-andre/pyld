@@ -64,8 +64,8 @@ class TestRunner(unittest.TextTestRunner):
             action='store_true', default=False,
             help='Bail out as soon as any test fails')
         self.parser.add_argument('-l', '--loader', dest='loader',
-            default='requests',
-            help='The remote URL document loader: requests, aiohttp '
+            default='sync',
+            help='The remote URL document loader: sync, async '
                  '[default: %(default)s]')
         self.parser.add_argument('-n', '--number', dest='number',
             help='Limit tests to those containing the specified test identifier')
@@ -77,10 +77,10 @@ class TestRunner(unittest.TextTestRunner):
         self.options = self.parser.parse_args()
 
         # Set a default JSON-LD document loader
-        if self.options.loader == 'requests':
-            jsonld._default_document_loader = jsonld.requests_document_loader()
-        elif self.options.loader == 'aiohttp':
-            jsonld._default_document_loader = jsonld.aiohttp_document_loader()
+        if self.options.loader == 'sync':
+            jsonld._default_document_loader = jsonld.sync_document_loader()
+        elif self.options.loader == 'async':
+            jsonld._default_document_loader = jsonld.async_document_loader()
 
         # config runner
         self.failfast = self.options.bail
