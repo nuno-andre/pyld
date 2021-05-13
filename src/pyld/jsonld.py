@@ -29,10 +29,11 @@ import lxml.html
 from numbers import Integral, Real
 from .exceptions import JsonLdError
 from .types import frozendict
-from .__about__ import (__copyright__, __license__, __version__)
-
-def cmp(a, b):
-    return (a > b) - (a < b)
+from .const import (
+    __copyright__, __license__, __version__,
+    KEYWORDS, JSONLD_VERSION,
+    RESOLVED_CONTEXT_CACHE_MAX_SIZE, INVERSE_CONTEXT_CACHE_MAX_SIZE,
+)
 
 __all__ = [
     '__copyright__', '__license__', '__version__',
@@ -64,38 +65,6 @@ RDF_JSON_LITERAL = RDF + 'JSON'
 # BCP47
 REGEX_BCP47 = r'^[a-zA-Z]{1,8}(-[a-zA-Z0-9]{1,8})*$'
 
-# JSON-LD keywords
-KEYWORDS = [
-    '@base',
-    '@container',
-    '@context',
-    '@default',
-    '@direction',
-    '@embed',
-    '@explicit',
-    '@first',
-    '@graph',
-    '@id',
-    '@import',
-    '@included',
-    '@index',
-    '@json',
-    '@language',
-    '@list',
-    '@nest',
-    '@none',
-    '@omitDefault',
-    '@propagate',
-    '@protected',
-    '@preserve',
-    '@requireAll',
-    '@reverse',
-    '@set',
-    '@type',
-    '@value',
-    '@version',
-    '@vocab']
-
 KEYWORD_PATTERN = r'^@[a-zA-Z]+$'
 
 # JSON-LD Namespace
@@ -104,17 +73,17 @@ JSON_LD_NS = 'http://www.w3.org/ns/json-ld#'
 # JSON-LD link header rel
 LINK_HEADER_REL = JSON_LD_NS + 'context'
 
-# Restraints
-MAX_CONTEXT_URLS = 10
-
 # resolved context cache
 # TODO: consider basing max on context size rather than number
-RESOLVED_CONTEXT_CACHE_MAX_SIZE = 100
 _resolved_context_cache = LRUCache(maxsize=RESOLVED_CONTEXT_CACHE_MAX_SIZE)
-INVERSE_CONTEXT_CACHE_MAX_SIZE = 20
 _inverse_context_cache = LRUCache(maxsize=INVERSE_CONTEXT_CACHE_MAX_SIZE)
 # Initial contexts, defined on first access
 INITIAL_CONTEXTS = {}
+
+
+def cmp(a, b):
+    return (a > b) - (a < b)
+
 
 def compact(input_, ctx, options=None):
     """
@@ -677,7 +646,7 @@ class JsonLdProcessor(object):
         options.setdefault('contextResolver',
             ContextResolver(_resolved_context_cache, options['documentLoader']))
         options.setdefault('extractAllScripts', False)
-        options.setdefault('processingMode', 'json-ld-1.1')
+        options.setdefault('processingMode', JSONLD_VERSION)
         options.setdefault('link', False)
         if options['link']:
             # force skip expansion when linking, "link" is not part of the
@@ -788,7 +757,7 @@ class JsonLdProcessor(object):
         options.setdefault('contextResolver',
             ContextResolver(_resolved_context_cache, options['documentLoader']))
         options.setdefault('extractAllScripts', False)
-        options.setdefault('processingMode', 'json-ld-1.1')
+        options.setdefault('processingMode', JSONLD_VERSION)
 
         # if input is a string, attempt to dereference remote document
         if _is_string(input_):
@@ -880,7 +849,7 @@ class JsonLdProcessor(object):
         options.setdefault('contextResolver',
             ContextResolver(_resolved_context_cache, options['documentLoader']))
         options.setdefault('extractAllScripts', True)
-        options.setdefault('processingMode', 'json-ld-1.1')
+        options.setdefault('processingMode', JSONLD_VERSION)
 
         try:
             # expand input
@@ -950,7 +919,7 @@ class JsonLdProcessor(object):
         options.setdefault('contextResolver',
             ContextResolver(_resolved_context_cache, options['documentLoader']))
         options.setdefault('extractAllScripts', False)
-        options.setdefault('processingMode', 'json-ld-1.1')
+        options.setdefault('processingMode', JSONLD_VERSION)
 
         # if frame is a string, attempt to dereference remote document
         if _is_string(frame):
@@ -1079,7 +1048,7 @@ class JsonLdProcessor(object):
         options.setdefault('contextResolver',
             ContextResolver(_resolved_context_cache, options['documentLoader']))
         options.setdefault('extractAllScripts', True)
-        options.setdefault('processingMode', 'json-ld-1.1')
+        options.setdefault('processingMode', JSONLD_VERSION)
 
         if not options['algorithm'] in ['URDNA2015', 'URGNA2012']:
             raise JsonLdError(
@@ -1187,7 +1156,7 @@ class JsonLdProcessor(object):
         options.setdefault('contextResolver',
             ContextResolver(_resolved_context_cache, options['documentLoader']))
         options.setdefault('extractAllScripts', True)
-        options.setdefault('processingMode', 'json-ld-1.1')
+        options.setdefault('processingMode', JSONLD_VERSION)
 
         try:
             # expand input
@@ -3093,13 +3062,13 @@ class JsonLdProcessor(object):
                         ' not compatible with ' + active_ctx['processingMode'],
                         'jsonld.ProcessingModeConflict', {'context': ctx},
                         code='processing mode conflict')
-                rval['processingMode'] = 'json-ld-1.1'
+                rval['processingMode'] = JSONLD_VERSION
                 rval['@version'] = ctx['@version']
                 defined['@version'] = True
 
             # if not set explicitly, set processingMode to "json-ld-1.1"
             rval['processingMode'] = rval.get(
-                'processingMode', active_ctx.get('processingMode', 'json-ld-1.1'))
+                'processingMode', active_ctx.get('processingMode', JSONLD_VERSION))
 
             if '@import' in ctx:
                 value = ctx['@import']

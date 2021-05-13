@@ -24,12 +24,12 @@ Release Process
 
 * ``$EDITOR CHANGELOG.md``: update CHANGELOG with new notes, version, and date.
 * commit changes
-* ``$EDITOR src/pyld/__about__.py``: update to release version and remove ``-dev``
+* ``$EDITOR src/pyld/const.py``: update to release version and remove ``-dev``
   suffix.
-* ``git commit CHANGELOG.md src/pyld/__about__.py -m "Release {version}."``
+* ``git commit CHANGELOG.md src/pyld/const.py -m "Release {version}."``
 * ``git tag {version}``
-* ``$EDITOR src/pyld/__about__.py``: update to next version and add ``-dev`` suffix.
-* ``git commit src/pyld/__about__.py -m "Start {next-version}."``
+* ``$EDITOR src/pyld/const.py``: update to next version and add ``-dev`` suffix.
+* ``git commit src/pyld/const.py -m "Start {next-version}."``
 * ``git push --tags``
 
 To ensure a clean `package <https://pypi.org/project/PyLD/>`_ upload to PyPI_,

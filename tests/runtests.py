@@ -585,10 +585,6 @@ class EarlReport():
     """
 
     def __init__(self):
-        about = {}
-        with open(os.path.join(
-                os.path.dirname(__file__), '..', 'src', 'pyld', '__about__.py')) as fp:
-            exec(fp.read(), about)
         self.now = datetime.datetime.utcnow().replace(microsecond=0)
         self.report = {
             '@context': {
@@ -632,8 +628,8 @@ class EarlReport():
                 'foaf:homepage': 'https://github.com/dlongley'
             },
             'doap:release': {
-                'doap:name': 'PyLD ' + about['__version__'],
-                'doap:revision': about['__version__'],
+                'doap:name': 'PyLD ' + jsonld.__version__,
+                'doap:revision': jsonld.__version__,
                 'doap:created': self.now.strftime('%Y-%m-%d')
             },
             'subjectOf': []

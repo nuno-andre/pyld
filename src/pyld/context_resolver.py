@@ -13,9 +13,7 @@ from .types import Mapping
 from .jsonld import prepend_base, load_document
 from .resolved_context import ResolvedContext
 from .exceptions import JsonLdSyntaxError, ContextUrlError, InvalidUrl
-
-
-MAX_CONTEXT_URLS = 10
+from .const import MAX_CONTEXT_URLS
 
 
 class ContextResolver:

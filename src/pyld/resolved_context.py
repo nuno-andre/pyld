@@ -9,8 +9,8 @@ Representation for a resolved Context.
 """
 
 from cachetools import LRUCache
+from .const import MAX_ACTIVE_CONTEXTS
 
-MAX_ACTIVE_CONTEXTS = 10
 
 class ResolvedContext:
     """
