@@ -19,7 +19,6 @@ import hashlib
 import json
 import re
 import sys
-import traceback
 import warnings
 import uuid
 from .context_resolver import ContextResolver
@@ -29,8 +28,9 @@ from collections import namedtuple
 from functools import cmp_to_key
 import lxml.html
 from numbers import Integral, Real
+from .exceptions import JsonLdError
 from .types import frozendict
-from pyld.__about__ import (__copyright__, __license__, __version__)
+from .__about__ import (__copyright__, __license__, __version__)
 
 def cmp(a, b):
     return (a > b) - (a < b)
@@ -5636,32 +5636,6 @@ class JsonLdProcessor(object):
         if '@vocab' in active_ctx:
             child['@vocab'] = active_ctx['@vocab']
         return child
-
-
-class JsonLdError(Exception):
-    """
-    Base class for JSON-LD errors.
-    """
-
-    def __init__(self, message, type_, details=None, code=None, cause=None):
-        Exception.__init__(self, message)
-        self.type = type_
-        self.details = details
-        self.code = code
-        self.cause = cause
-        self.causeTrace = traceback.extract_tb(*sys.exc_info()[2:])
-
-    def __str__(self):
-        rval = str(self.args)
-        rval += '\nType: ' + self.type
-        if self.code:
-            rval += '\nCode: ' + self.code
-        if self.details:
-            rval += '\nDetails: ' + repr(self.details)
-        if self.cause:
-            rval += '\nCause: ' + str(self.cause)
-            rval += ''.join(traceback.format_list(self.causeTrace))
-        return rval
 
 
 class IdentifierIssuer(object):
