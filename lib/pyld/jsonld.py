@@ -29,7 +29,7 @@ from collections import namedtuple
 from functools import cmp_to_key
 import lxml.html
 from numbers import Integral, Real
-from frozendict import frozendict
+from .types import frozendict
 from pyld.__about__ import (__copyright__, __license__, __version__)
 
 def cmp(a, b):
