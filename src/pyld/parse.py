@@ -185,8 +185,7 @@ def parse_nquads(input_):
         try:
             match = _quad(line).groups()
         except AttributeError:
-            raise ParseError('Error while parsing N-Quads invalid quad.',
-                             {'line': i})
+            raise ParseError('Error while parsing N-Quads invalid quad.', line=i)
 
         # get subject
         if match[0] is not None:

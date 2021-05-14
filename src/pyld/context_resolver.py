@@ -7,12 +7,40 @@ Context Resolver for managing remote contexts.
 .. moduleauthor:: Dave Longley
 .. moduleauthor:: Gregg Kellogg <gregg@greggkellogg.net>
 """
-
+from cachetools import LRUCache
 from c14n.Canonicalize import canonicalize
 from .types import Mapping
-from .resolved_context import ResolvedContext
 from .exceptions import JsonLdSyntaxError, ContextUrlError, InvalidUrl
-from .const import MAX_CONTEXT_URLS
+from .const import MAX_CONTEXT_URLS, MAX_ACTIVE_CONTEXTS
+
+
+class ResolvedContext:
+    """
+    A cached contex document, with a cache indexed by referencing active
+    context.
+    """
+    def __init__(self, document):
+        """
+        Creates a ResolvedContext with caching for processed contexts
+        relative to some other Active Context.
+        """
+        # processor-specific RDF parsers
+        self.document = document
+        self.cache = LRUCache(maxsize=MAX_ACTIVE_CONTEXTS)
+
+    def get_processed(self, active_ctx):
+        """
+        Returns any processed context for this resolved context relative
+        to an active context.
+        """
+        return self.cache.get(active_ctx['_uuid'])
+
+    def set_processed(self, active_ctx, processed_ctx):
+        """
+        Sets any processed context for this resolved context relative to
+        an active context.
+        """
+        self.cache[active_ctx['_uuid']] = processed_ctx
 
 
 class ContextResolver:
@@ -35,8 +63,8 @@ class ContextResolver:
         :param active_ctx: the current active context.
         :param context: the context to resolve.
         :param base: the absolute URL to use for making url absolute.
-        :param cycles: the maximum number of times to recusively fetch contexts.
-          (default MAX_CONTEXT_URLS).
+        :param cycles: the maximum number of times to recusively fetch
+            contexts (default MAX_CONTEXT_URLS).
         """
         if cycles is None:
             cycles = set()
@@ -66,10 +94,8 @@ class ContextResolver:
             elif not ctx:
                 all_resolved.append(ResolvedContext(False))
             elif not isinstance(ctx, Mapping):
-                raise JsonLdSyntaxError(
-                    'Invalid JSON-LD syntax; @context must be an object.',
-                    {'context': ctx},
-                    code='invalid local context')
+                raise JsonLdSyntaxError('@context must be an object.',
+                                        context=ctx, code='invalid local context')
             else:
                 # context is an object, get/create `ResolvedContext` for it
                 key = canonicalize(dict(ctx)).decode('UTF-8')
@@ -123,22 +149,22 @@ class ContextResolver:
 
         # check for max context URLs fetched during a resolve operation
         if len(cycles) > MAX_CONTEXT_URLS:
-            raise ContextUrlError(
-                'Maximum number of @context URLs exceeded.',
-                {'max': MAX_CONTEXT_URLS},
-                code=('loading remote context failed'
-                      if active_ctx.get('processingMode') == 'json-ld-1.0'
-                      else 'context overflow'))
+            if active_ctx.get('processingMode') == 'json-ld-1.0':
+                code = 'recursive context inclusion'
+            else:
+                code = 'context overflow'
+            raise ContextUrlError('Maximum number of @context URLs exceeded.',
+                                  max=MAX_CONTEXT_URLS, code=code)
 
         # check for context URL cycle
         # shortcut to avoid extra work that would eventually hit the max above
         if url in cycles:
-            raise ContextUrlError(
-                'Cyclical @context URLs detected.',
-                {'url': url},
-                code=('recursive context inclusion'
-                      if active_ctx.get('processingMode') == 'json-ld-1.0'
-                      else 'context overflow'))
+            if active_ctx.get('processingMode') == 'json-ld-1.0':
+                code = 'recursive context inclusion'
+            else:
+                code = 'context overflow'
+            raise ContextUrlError('Cyclical @context URLs detected.',
+                                  url=url, code=code)
 
         # track cycles
         cycles.add(url)
@@ -150,7 +176,7 @@ class ContextResolver:
                 requestProfile='http://www.w3.org/ns/json-ld#context',
             )
             context = remote_doc.get('document', url)
-        except Exception as cause:
+        except Exception as e:
             raise InvalidUrl(
                 'Dereferencing a URL did not result in a valid JSON-LD object. '
                 'Possible causes are an inaccessible URL perhaps due to '
@@ -158,22 +184,18 @@ class ContextResolver:
                 'using client-side JavaScript), too many redirects, a '
                 'non-JSON response, or more than one HTTP Link Header was '
                 'provided for a remote context.',
-                {'url': url, 'cause': cause},
-                code='loading remote context failed')
+                url=url, cause=e, code='loading remote context failed')
 
         # ensure ctx is an object
         if not isinstance(context, Mapping):
             raise InvalidUrl(
                 'Dereferencing a URL did not result in a JSON object. The '
                 'response was valid JSON, but it was not a JSON object.',
-                {'url': url},
-                code='invalid remote context')
+                url=url, code='invalid remote context')
 
         # use empty context if no @context key is present
         if '@context' not in context:
             context = {'@context': {}}
-        else:
-            context = {'@context': context['@context']}
 
         # append @context URL to context if given
         if remote_doc['contextUrl']:

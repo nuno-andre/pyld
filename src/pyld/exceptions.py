@@ -1,3 +1,4 @@
+from typing import Optional
 import traceback
 import sys
 
@@ -6,10 +7,15 @@ class JsonLdError(Exception):
     """
     Base class for JSON-LD errors.
     """
-    def __init__(self, message, type_, details=None, code=None, cause=None):
+    def __init__(
+        self,
+        message: str,
+        code: Optional[str] = None,
+        cause: Optional[Exception] = None,
+        **kwargs,
+    ):
         super().__init__(self, message)
-        self.type = type_
-        self.details = details
+        self.details = kwargs
         self.code = code
         self.cause = cause
         self.causeTrace = traceback.extract_tb(*sys.exc_info()[2:])
@@ -27,85 +33,73 @@ class JsonLdError(Exception):
         return rval
 
 
-# TODO: transition class
-class JsonLdException(JsonLdError):
-
-    def __init__(self, message, details=None, code=None, cause=None):
-        super().__init__(message, self.type, details, code, cause)
-
-
-class JsonLdSyntaxError(JsonLdException):
+class JsonLdSyntaxError(JsonLdError):
     type = 'jsonld.SyntaxError'
 
-    def __init__(self, message=None, details=None, code=None, cause=None):
+    def __init__(self, message=None, **kwargs):
         message = ': '.join(filter(None, ('Invalid JSON-LD syntax', message)))
-        super().__init__(message, details, code, cause)
+        super().__init__(message, **kwargs)
 
 
-class CompactError(JsonLdException):
+class CompactError(JsonLdError):
     type = 'jsonld.CompactError'
 
 
-class ContextUrlError(JsonLdException):
+class ContextUrlError(JsonLdError):
     type = 'jsonld.ContextUrlError'
 
 
-class CyclicalContext(JsonLdException):
+class CyclicalContext(JsonLdError):
     type = 'jsonld.CyclicalContext'
 
 
-class FlattenError(JsonLdException):
+class FlattenError(JsonLdError):
     type = 'jsonld.FlattenError'
 
 
-class FrameError(JsonLdException):
+class FrameError(JsonLdError):
     type = 'jsonld.FrameError'
 
 
-class InvalidJsonLiteral(ValueError, JsonLdException):
+class InvalidJsonLiteral(JsonLdError, ValueError):
     type = 'jsonld.InvalidJsonLiteral'
 
 
-class InvalidUrl(JsonLdException):
+class InvalidUrl(JsonLdError):
     type = 'jsonld.InvalidUrl'
 
 
-class LoadDocumentError(JsonLdException):
+class LoadDocumentError(JsonLdError):
     type = 'jsonld.LoadDocumentError'
 
 
-class NormalizeError(JsonLdException):
+class NormalizeError(JsonLdError):
     type = 'jsonld.NormalizeError'
 
 
-class NullRemoteDocument(JsonLdException):
+class NullRemoteDocument(JsonLdError):
     type = 'jsonld.NullRemoteDocument'
 
-    def __init__(self, details=None, code=None, cause=None):
-        msg = 'No remote document found at the given URL.'
-        super().__init__(msg, details=details, code=code, cause=cause)
+    def __init__(self, **kwargs):
+        message = 'No remote document found at the given URL.'
+        super().__init__(message, **kwargs)
 
 
-class ParseError(JsonLdException):
+class ParseError(JsonLdError):
     type = 'jsonld.ParseError'
 
 
-class ProcessingModeConflict(JsonLdException):
+class ProcessingModeConflict(JsonLdError):
     type = 'jsonld.ProcessingModeConflict'
 
 
-class RdfError(JsonLdException):
+class RdfError(JsonLdError):
     type = 'jsonld.RdfError'
 
 
-class UnknownFormat(JsonLdException):
+class UnknownFormat(JsonLdError):
     type = 'jsonld.UnknownFormat'
 
-    def __init__(self, message, details=None, code=None, cause=None, format=None):
-        if format:
-            details = (details or {}).update({'format': format})
-        super().__init__(message, details=details, code=code, cause=cause)
 
-
-class UnsupportedVersion(JsonLdException):
+class UnsupportedVersion(JsonLdError):
     type = 'jsonld.UnsupportedVersion'

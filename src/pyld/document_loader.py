@@ -10,7 +10,7 @@ Remote document loader.
 .. moduleauthor:: Olaf Conradi <olaf@conradi.org>
 .. moduleauthor:: Nuno André <mail@nunoand.re>
 """
-from typing import Any, Optional, Callable, Union
+from typing import Any, Optional, Callable
 from urllib.parse import urlparse
 import string
 import re
@@ -43,15 +43,13 @@ def validate_url(url: str, secure: bool = False) -> None:
         raise InvalidUrl(
             'URL could not be dereferenced; only "http" and "https" '
             'URLs are supported.',
-            {'url': url},
-            code='loading document failed')
+            url=url, code='loading document failed')
 
     if secure and pieces.scheme != 'https':
         raise InvalidUrl(
             'URL could not be dereferenced; secure mode enabled and '
             'the URL\'s scheme is not "https".',
-            {'url': url},
-            code='loading document failed')
+            url=url, code='loading document failed')
 
 
 def parse_response(response: Response, url: str) -> dict[str, Any]:
@@ -72,8 +70,7 @@ def parse_response(response: Response, url: str) -> dict[str, Any]:
                 raise LoadDocumentError(
                     'URL could not be dereferenced, it has more '
                     'than one associated HTTP Link Header.',
-                    {'url': url},
-                    code='multiple context link headers')
+                    url=url, code='multiple context link headers')
             doc['contextUrl'] = linked_context['target']
 
         linked_alternate = parse_link_header(link_header).get('alternate')

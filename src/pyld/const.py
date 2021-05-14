@@ -6,10 +6,17 @@ __license__ = 'New BSD license'
 __version__ = '2.1.0-dev'
 
 
-MAX_CONTEXT_URLS = getenv('PYLD_MAX_CONTEXT_URLS', 10)
-MAX_ACTIVE_CONTEXTS = getenv('PYLD_MAX_ACTIVE_CONTEXTS', 10)
-RESOLVED_CONTEXT_CACHE_MAX_SIZE = getenv('PYLD_RESOLVED_CONTEXT_CACHE_MAX_SIZE', 100)
-INVERSE_CONTEXT_CACHE_MAX_SIZE = getenv('PYLD_INVERSE_CONTEXT_CACHE_MAX_SIZE', 20)
+def get_intenv(var: str, default: int) -> int:
+    try:
+        return int(getenv(f'PYLD_{var}', default))
+    except ValueError:
+        return default
+
+
+MAX_CONTEXT_URLS = get_intenv('MAX_CONTEXT_URLS', 10)
+MAX_ACTIVE_CONTEXTS = get_intenv('MAX_ACTIVE_CONTEXTS', 10)
+RESOLVED_CONTEXT_CACHE_MAX_SIZE = get_intenv('RESOLVED_CONTEXT_CACHE_MAX_SIZE', 100)
+INVERSE_CONTEXT_CACHE_MAX_SIZE = get_intenv('INVERSE_CONTEXT_CACHE_MAX_SIZE', 20)
 
 # XSD constants
 XSD_BOOLEAN = 'http://www.w3.org/2001/XMLSchema#boolean'

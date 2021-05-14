@@ -28,9 +28,9 @@ import lxml.html
 from numbers import Integral, Real
 from .exceptions import (
     JsonLdError, CompactError, CyclicalContext, FlattenError,
-    FrameError, InvalidJsonLiteral, LoadDocumentError, NormalizeError,
-    NullRemoteDocument, ProcessingModeConflict, RdfError, UnknownFormat,
-    UnsupportedVersion,
+    FrameError, InvalidJsonLiteral, JsonLdSyntaxError, LoadDocumentError,
+    NormalizeError, NullRemoteDocument, ProcessingModeConflict, RdfError,
+    UnknownFormat, UnsupportedVersion,
 )
 from .types import frozendict
 from .const import (
@@ -677,7 +677,7 @@ class JsonLdProcessor(object):
         except Exception as e:
             raise LoadDocumentError(
                 'Could not retrieve a JSON-LD document from the URL.',
-                {'remoteDoc': remote_doc}, code='loading document failed',
+                remoteDoc=remote_doc, code='loading document failed',
                 cause=e)
 
         # set default base
@@ -832,7 +832,7 @@ class JsonLdProcessor(object):
         except Exception as e:
             raise LoadDocumentError(
                 'Could not retrieve a JSON-LD document from the URL.',
-                {'remoteDoc': remote_frame},
+                remoteDoc=remote_frame,
                 code='loading document failed',
                 cause=e)
 
@@ -1384,47 +1384,46 @@ class JsonLdProcessor(object):
 
         # subject is an IRI
         if s['type'] == 'IRI':
-            quad += '<' + s['value'] + '>'
+            quad += f'<{s["value"]}>'
         else:
             quad += s['value']
         quad += ' '
 
         # property is an IRI
         if p['type'] == 'IRI':
-            quad += '<' + p['value'] + '>'
+            quad += f'<{p["value"]}>'
         else:
             quad += p['value']
         quad += ' '
 
         # object is IRI, bnode, or literal
         if o['type'] == 'IRI':
-            quad += '<' + o['value'] + '>'
+            quad += f'<{o["value"]}>'
         elif(o['type'] == 'blank node'):
             quad += o['value']
         else:
             escaped = (
                 o['value']
-                .replace('\\', '\\\\')
-                .replace('\t', '\\t')
-                .replace('\n', '\\n')
-                .replace('\r', '\\r')
-                .replace('\"', '\\"'))
+                .replace('\\', r'\\')
+                .replace('\t', r'\t')
+                .replace('\n', r'\n')
+                .replace('\r', r'\r')
+                .replace('"', r'\"'))
             quad += '"' + escaped + '"'
             if o['datatype'] == RDF_LANGSTRING:
                 if o['language']:
-                    quad += '@' + o['language']
+                    quad += f'@{o["language"]}'
             elif o['datatype'] != XSD_STRING:
-                quad += '^^<' + o['datatype'] + '>'
+                quad += f'^^<{o["datatype"]}>'
 
         # graph
         if g is not None:
             if not g.startswith('_:'):
-                quad += ' <' + g + '>'
+                quad += f' <{g}>'
             else:
-                quad += ' ' + g
+                quad += f' {g}'
 
-        quad += ' .\n'
-        return quad
+        return quad + ' .\n'
 
     @staticmethod
     def arrayify(value):
@@ -1683,9 +1682,8 @@ class JsonLdProcessor(object):
                 # Note: expanded value must be an array due to expansion
                 # algorithm.
                 if not _is_array(expanded_value):
-                    raise JsonLdError(
-                        'JSON-LD compact error; expanded value must be an array.',
-                        'jsonld.SyntaxError')
+                    raise CompactError(
+                        'JSON-LD compact error; expanded value must be an array.')
 
                 # preserve empty arrays
                 if len(expanded_value) == 0:
@@ -2053,11 +2051,10 @@ class JsonLdProcessor(object):
         if '@value' in rval:
             # @value must only have @language or @type
             if '@type' in rval and ('@language' in rval or '@direction' in rval):
-                raise JsonLdError(
-                    'Invalid JSON-LD syntax; an element containing '
-                    '"@value" may not contain both "@type" and either '
-                    '"@language" or "@direction".',
-                    'jsonld.SyntaxError', {'element': rval},
+                raise JsonLdSyntaxError(
+                    'an element containing "@value" may not contain both "@type" '
+                    'and either "@language" or "@direction".',
+                    element=rval,
                     code='invalid value object')
             valid_count = count - 1
             if '@type' in rval:
@@ -2069,11 +2066,10 @@ class JsonLdProcessor(object):
             if '@direction' in rval:
                 valid_count -= 1
             if valid_count != 0:
-                raise JsonLdError(
-                    'Invalid JSON-LD syntax; an element containing "@value" '
-                    'may only have an "@index" property and at most one other '
-                    'property which can be "@type" or "@language".',
-                    'jsonld.SyntaxError', {'element': rval},
+                raise JsonLdSyntaxError(
+                    'an element containing "@value" may only have an "@index" property'
+                    ' and at most one other property which can be "@type" or "@language".',
+                    element=rval,
                     code='invalid value object')
 
             values = JsonLdProcessor.get_values(rval, '@value')
@@ -2089,32 +2085,28 @@ class JsonLdProcessor(object):
             # if @language is present, @value must be a string
             elif '@language' in rval and not all(
                     _is_string(val) or _is_empty_object(val) for val in values):
-                raise JsonLdError(
-                    'Invalid JSON-LD syntax; only strings may be '
-                    'language-tagged.', 'jsonld.SyntaxError',
-                    {'element': rval}, code='invalid language-tagged value')
+                raise JsonLdSyntaxError(
+                    'only strings may be language-tagged.',
+                    element=rval, code='invalid language-tagged value')
             elif not all(
                     _is_empty_object(type) or
                     _is_string(type) and
                     _is_absolute_iri(type) and
                     not type.startswith('_:') for type in types):
-                raise JsonLdError(
-                    'Invalid JSON-LD syntax; an element containing "@value" '
-                    'and "@type" must have an absolute IRI for the value '
-                    'of "@type".', 'jsonld.SyntaxError', {'element': rval},
-                    code='invalid typed value')
+                raise JsonLdSyntaxError(
+                    'an element containing "@value" and "@type" must have '
+                    'an absolute IRI for the value of "@type".',
+                    element=rval, code='invalid typed value')
         # convert @type to an array
         elif '@type' in rval and not _is_array(rval['@type']):
             rval['@type'] = [rval['@type']]
         # handle @set and @list
         elif '@set' in rval or '@list' in rval:
             if count > 1 and not (count == 2 and '@index' in rval):
-                raise JsonLdError(
-                    'Invalid JSON-LD syntax; if an element has the '
-                    'property "@set" or "@list", then it can have at most '
-                    'one other property, which is "@index".',
-                    'jsonld.SyntaxError', {'element': rval},
-                    code='invalid set or list object')
+                raise JsonLdSyntaxError(
+                    'if an element has the property "@set" or "@list", then it can '
+                    'have at most one other property, which is "@index".',
+                    element=rval, code='invalid set or list object')
             # optimize away @set
             if '@set' in rval:
                 rval = rval['@set']
@@ -2185,47 +2177,39 @@ class JsonLdProcessor(object):
 
             if _is_keyword(expanded_property):
                 if expanded_active_property == '@reverse':
-                    raise JsonLdError(
-                        'Invalid JSON-LD syntax; a keyword cannot be used as '
-                        'a @reverse property.',
-                        'jsonld.SyntaxError', {'value': value},
-                        code='invalid reverse property map')
+                    raise JsonLdSyntaxError(
+                        'a keyword cannot be used as a @reverse property.',
+                        value=value, code='invalid reverse property map')
                 if (expanded_property in expanded_parent and
                         expanded_property != '@included' and
                         expanded_property != '@type'):
-                    raise JsonLdError(
-                        'Invalid JSON-LD syntax; colliding keywords detected.',
-                        'jsonld.SyntaxError', {'keyword': expanded_property},
-                        code='colliding keywords')
+                    raise JsonLdSyntaxError(
+                        'colliding keywords detected.',
+                        keyword=expanded_property, code='colliding keywords')
 
             # syntax error if @id is not a string
             if expanded_property == '@id':
                 if not _is_string(value):
                     if not options.get('isFrame'):
-                        raise JsonLdError(
-                            'Invalid JSON-LD syntax; "@id" value must be a '
-                            'string.', 'jsonld.SyntaxError',
-                            {'value': value}, code='invalid @id value')
+                        raise JsonLdSyntaxError('"@id" value must be a string.',
+                                                value=value, code='invalid @id value')
                     if _is_object(value):
                         if not _is_empty_object(value):
-                            raise JsonLdError(
-                                'Invalid JSON-LD syntax; "@id" value must be a '
+                            raise JsonLdSyntaxError(
+                                '"@id" value must be a '
                                 'string or an empty object or array of strings.',
-                                'jsonld.SyntaxError',
-                                {'value': value}, code='invalid @id value')
+                                value=value, code='invalid @id value')
                     elif _is_array(value):
                         if not all(_is_string(v) for v in value):
-                            raise JsonLdError(
-                                'Invalid JSON-LD syntax; "@id" value an empty object '
+                            raise JsonLdSyntaxError(
+                                '"@id" value an empty object '
                                 'or array of strings, if framing',
-                                'jsonld.SyntaxError',
-                                {'value': value}, code='invalid @id value')
+                                value=value, code='invalid @id value')
                     else:
-                        raise JsonLdError(
-                            'Invalid JSON-LD syntax; "@id" value an empty object or '
+                        raise JsonLdSyntaxError(
+                            '"@id" value an empty object or '
                             'array of strings, if framing',
-                            'jsonld.SyntaxError',
-                            {'value': value}, code='invalid @id value')
+                            value=value, code='invalid @id value')
 
                 expanded_values = []
                 for v in JsonLdProcessor.arrayify(value):
@@ -2273,11 +2257,10 @@ class JsonLdProcessor(object):
                 included_result = JsonLdProcessor.arrayify(
                     self._expand(active_ctx, active_property, value, options))
                 if not all(_is_subject(v) for v in included_result):
-                    raise JsonLdError(
-                        'Invalid JSON-LD syntax; "values of @included '
+                    raise JsonLdSyntaxError(
+                        '"values of @included '
                         'must expand to node objects.',
-                        'jsonld.SyntaxError',
-                        {'value': value}, code='invalid @included value')
+                        value=value, code='invalid @included value')
                 JsonLdProcessor.add_value(
                     expanded_parent, '@included', included_result,
                     {'propertyIsArray': True})
@@ -2286,10 +2269,9 @@ class JsonLdProcessor(object):
             # @graph must be an array or an object
             if (expanded_property == '@graph' and
                     not (_is_object(value) or _is_array(value))):
-                raise JsonLdError(
-                    'Invalid JSON-LD syntax; "@graph" must not be an '
-                    'object or an array.', 'jsonld.SyntaxError',
-                    {'value': value}, code='invalid @graph value')
+                raise JsonLdSyntaxError(
+                    '"@graph" must not be an object or an array.',
+                    value=value, code='invalid @graph value')
 
             # @value must not be an object or an array
             if expanded_property == '@value':
@@ -2309,10 +2291,9 @@ class JsonLdProcessor(object):
                     # didn't exist
                     continue
                 if not _is_string(value) and not options['isFrame']:
-                    raise JsonLdError(
-                        'Invalid JSON-LD syntax; "@language" value must be '
-                        'a string.', 'jsonld.SyntaxError', {'value': value},
-                        code='invalid language-tagged string')
+                    raise JsonLdSyntaxError(
+                        '"@language" value must be a string.',
+                        value=value, code='invalid language-tagged string')
                 # ensure language value is lowercase
                 expanded_values = []
                 for v in JsonLdProcessor.arrayify(value):
@@ -2325,17 +2306,13 @@ class JsonLdProcessor(object):
             # @direction must be "ltr" or "rtl"
             if expanded_property == '@direction':
                 if not _is_string(value) and not options['isFrame']:
-                    raise JsonLdError(
-                        'Invalid JSON-LD syntax; "@direction" value must be '
-                        'a string.', 'jsonld.SyntaxError', {'value': value},
-                        code='invalid base direction')
+                    raise JsonLdSyntaxError('"@direction" value must be a string.',
+                                            value=value, code='invalid base direction')
                 value = JsonLdProcessor.arrayify(value)
                 for dir in value:
                     if _is_string(dir) and dir != 'ltr' and dir != 'rtl':
-                        raise JsonLdError(
-                            'Invalid JSON-LD syntax; "@direction" must be "ltr" or "rtl".',
-                            'jsonld.SyntaxError', {'value': value},
-                            code='invalid base direction')
+                        raise JsonLdSyntaxError('"@direction" must be "ltr" or "rtl".',
+                                                value=value, code='invalid base direction')
                 JsonLdProcessor.add_value(
                     expanded_parent, '@direction', value,
                     {'propertyIsArray': options['isFrame']})
@@ -2344,20 +2321,16 @@ class JsonLdProcessor(object):
             # @index must be a string
             if expanded_property == '@index':
                 if not _is_string(value):
-                    raise JsonLdError(
-                        'Invalid JSON-LD syntax; "@index" value must be '
-                        'a string.', 'jsonld.SyntaxError', {'value': value},
-                        code='invalid @index value')
+                    raise JsonLdSyntaxError('"@index" value must be a string.',
+                                            value=value, code='invalid @index value')
                 JsonLdProcessor.add_value(expanded_parent, '@index', value)
                 continue
 
             # reverse must be an object
             if expanded_property == '@reverse':
                 if not _is_object(value):
-                    raise JsonLdError(
-                        'Invalid JSON-LD syntax; "@reverse" value must be '
-                        'an object.', 'jsonld.SyntaxError', {'value': value},
-                        code='invalid @reverse value')
+                    raise JsonLdSyntaxError('"@reverse" value must be an object.',
+                                            value=value, code='invalid @reverse value')
 
                 expanded_value = self._expand(
                     active_ctx, '@reverse', value, options,
@@ -2383,11 +2356,9 @@ class JsonLdProcessor(object):
                         {'propertyIsArray': True})
                     for item in items:
                         if _is_value(item) or _is_list(item):
-                            raise JsonLdError(
-                                'Invalid JSON-LD syntax; "@reverse" '
-                                'value must not be an @value or an @list',
-                                'jsonld.SyntaxError',
-                                {'value': expanded_value},
+                            raise JsonLdSyntaxError(
+                                '"@reverse" value must not be an @value or an @list',
+                                value=expanded_value,
                                 code='invalid reverse property value')
                         JsonLdProcessor.add_value(
                             reverse_map, property, item,
@@ -2484,11 +2455,9 @@ class JsonLdProcessor(object):
                 expanded_value = JsonLdProcessor.arrayify(expanded_value)
                 for item in expanded_value:
                     if _is_value(item) or _is_list(item):
-                        raise JsonLdError(
-                            'Invalid JSON-LD syntax; "@reverse" value must '
-                            'not be an @value or an @list.',
-                            'jsonld.SyntaxError', {'value': expanded_value},
-                            code='invalid reverse property value')
+                        raise JsonLdSyntaxError(
+                            '"@reverse" value must not be an @value or an @list.',
+                            value=expanded_value, code='invalid reverse property value')
                     JsonLdProcessor.add_value(
                         reverse_map, expanded_property, item,
                         {'propertyIsArray': True})
@@ -2511,11 +2480,9 @@ class JsonLdProcessor(object):
                 pass
             elif ((_is_object(unexpanded_value) or _is_array(unexpanded_value)) and
                     not options['isFrame']):
-                raise JsonLdError(
-                    'Invalid JSON-LD syntax; @value" value must not be an '
-                    'object or an array.',
-                    'jsonld.SyntaxError', {'value': unexpanded_value},
-                    code='invalid value object value')
+                raise JsonLdSyntaxError(
+                    '@value" value must not be an object or an array.',
+                    value=unexpanded_value, code='invalid value object value')
 
         # expand each nested key
         for key in nests:
@@ -2523,10 +2490,8 @@ class JsonLdProcessor(object):
                 if (not _is_object(nv) or [
                     k for k, v in nv.items()
                         if self._expand_iri(active_ctx, k, vocab=True) == '@value']):
-                    raise JsonLdError(
-                        'Invalid JSON-LD syntax; nested value must be a node object.',
-                        'jsonld.SyntaxError', {'value': nv},
-                        code='invalid @nest value')
+                    raise JsonLdSyntaxError('nested value must be a node object.',
+                                            value=nv, code='invalid @nest value')
                 self._expand_object(
                     active_ctx, active_property, expanded_active_property,
                     nv, expanded_parent, options,
@@ -2811,10 +2776,9 @@ class JsonLdProcessor(object):
             if not ctx:
                 if (not override_protected and
                         any(v.get('protected') for v in rval['mappings'].values())):
-                    raise JsonLdError(
+                    raise JsonLdSyntaxError(
                         'Tried to nullify a context with protected terms outside of '
                         'a term definition.',
-                        'jsonld.SyntaxError', {},
                         code='invalid context nullification')
                 rval = self._get_initial_context(options)
                 continue
@@ -2830,10 +2794,8 @@ class JsonLdProcessor(object):
                 ctx = ctx['@context']
 
             if not _is_object(ctx):
-                raise JsonLdError(
-                    'Invalid JSON-LD syntax; invalid remote context.',
-                    'jsonld.SyntaxError', {'context': ctx},
-                    code='invalid local context')
+                raise JsonLdSyntaxError('invalid remote context.',
+                                        context=ctx, code='invalid local context')
 
             # TODO: there is likely a `previousContext` cloning optimization that
             # could be applied here (no need to copy it under certain conditions)
@@ -2848,13 +2810,13 @@ class JsonLdProcessor(object):
                 if ctx['@version'] != 1.1:
                     raise UnsupportedVersion(
                         f'Unsupported JSON-LD version: {ctx["@version"]}',
-                        {'context': ctx},
+                        context=ctx,
                         code='invalid @version value')
                 if active_ctx.get('processingMode') == 'json-ld-1.0':
                     raise ProcessingModeConflict(
                         f'@version: {ctx["@version"]} not compatible '
                         f'with {active_ctx["processingMode"]}',
-                        {'context': ctx},
+                        context=ctx,
                         code='processing mode conflict')
                 rval['processingMode'] = JSONLD_VERSION
                 rval['@version'] = ctx['@version']
@@ -2867,16 +2829,11 @@ class JsonLdProcessor(object):
             if '@import' in ctx:
                 value = ctx['@import']
                 if rval['processingMode'] == 'json-ld-1.0':
-                    raise JsonLdError(
-                        'Invalid JSON-LD syntax; @import not compatible with '
-                        'json-ld-1.0',
-                        'jsonld.SyntaxError', {'context': ctx},
-                        code='invalid context entry')
+                    raise JsonLdSyntaxError('@import not compatible with json-ld-1.0',
+                                            context=ctx, code='invalid context entry')
                 if not _is_string(value):
-                    raise JsonLdError(
-                        'Invalid JSON-LD syntax; @import must be a string',
-                        'jsonld.SyntaxError', {'context': ctx},
-                        code='invalid @import value')
+                    raise JsonLdSyntaxError('@import must be a string',
+                                            context=ctx, code='invalid @import value')
 
                 # resolve contexts
                 if '_uuid' not in active_ctx:
@@ -2884,10 +2841,8 @@ class JsonLdProcessor(object):
                 resolved_import = options['contextResolver'].resolve(
                     active_ctx, value, options.get('base', ''))
                 if len(resolved_import) != 1:
-                    raise JsonLdError(
-                        'Invalid JSON-LD syntax; @import must reference a single context.',
-                        'jsonld.SyntaxError', {'context': value},
-                        code='invalid remote context')
+                    raise JsonLdSyntaxError('@import must reference a single context.',
+                                            context=value, code='invalid remote context')
                 resolved_import = resolved_import[0]
 
                 processed_import = resolved_import.get_processed(active_ctx)
@@ -2899,10 +2854,9 @@ class JsonLdProcessor(object):
                 else:
                     import_ctx = resolved_import.document
                     if '@import' in import_ctx:
-                        raise JsonLdError(
-                            'Invalid JSON-LD syntax; @import must not include @import entry',
-                            'jsonld.SyntaxError', {'context': import_ctx},
-                            code='invalid context entry')
+                        raise JsonLdSyntaxError(
+                            '@import must not include @import entry',
+                            context=import_ctx, code='invalid context entry')
 
                     # value must be an object with '@context'
                     # from _find_context_urls
@@ -2930,11 +2884,9 @@ class JsonLdProcessor(object):
                 elif _is_relative_iri(base):
                     base = prepend_base(active_ctx.get('@base'), base)
                 else:
-                    raise JsonLdError(
-                        'Invalid JSON-LD syntax; the value of "@base" in a '
-                        '@context must be a string or null.',
-                        'jsonld.SyntaxError', {'context': ctx},
-                        code='invalid base IRI')
+                    raise JsonLdSyntaxError(
+                        'the value of "@base" in a @context must be a string or null.',
+                        context=ctx, code='invalid base IRI')
                 rval['@base'] = base
                 defined['@base'] = True
 
@@ -2944,17 +2896,13 @@ class JsonLdProcessor(object):
                 if value is None:
                     del rval['@vocab']
                 elif not _is_string(value):
-                    raise JsonLdError(
-                        'Invalid JSON-LD syntax; the value of "@vocab" in a '
-                        '@context must be a string or null.',
-                        'jsonld.SyntaxError', {'context': ctx},
-                        code='invalid vocab mapping')
+                    raise JsonLdSyntaxError(
+                        'the value of "@vocab" in a @context must be a string or null.',
+                        context=ctx, code='invalid vocab mapping')
                 elif not _is_absolute_iri(value) and rval['processingMode'] == 'json-ld-1.0':
-                    raise JsonLdError(
-                        'Invalid JSON-LD syntax; the value of "@vocab" in a '
-                        '@context must be an absolute IRI.',
-                        'jsonld.SyntaxError', {'context': ctx},
-                        code='invalid vocab mapping')
+                    raise JsonLdSyntaxError(
+                        'the value of "@vocab" in a @context must be an absolute IRI.',
+                        context=ctx, code='invalid vocab mapping')
                 else:
                     rval['@vocab'] = self._expand_iri(
                         rval, value, vocab=True, base=options.get('base', ''))
@@ -2966,11 +2914,9 @@ class JsonLdProcessor(object):
                 if value is None:
                     del rval['@language']
                 elif not _is_string(value):
-                    raise JsonLdError(
-                        'Invalid JSON-LD syntax; the value of "@language" in '
-                        'a @context must be a string or null.',
-                        'jsonld.SyntaxError', {'context': ctx},
-                        code='invalid default language')
+                    raise JsonLdSyntaxError(
+                        'the value of "@language" in a @context must be a string or null.',
+                        context=ctx, code='invalid default language')
                 else:
                     rval['@language'] = value.lower()
                 defined['@language'] = True
@@ -2979,19 +2925,15 @@ class JsonLdProcessor(object):
             if '@direction' in ctx:
                 value = ctx['@direction']
                 if rval['processingMode'] == 'json-ld-1.0':
-                    raise JsonLdError(
-                        'Invalid JSON-LD syntax; @direction not compatible with '
-                        'json-ld-1.0',
-                        'jsonld.SyntaxError', {'context': ctx},
-                        code='invalid context entry')
+                    raise JsonLdSyntaxError(
+                        '@direction not compatible with json-ld-1.0',
+                        context=ctx, code='invalid context entry')
                 if value is None:
                     del rval['@direction']
                 elif value != 'ltr' and value != 'rtl':
-                    raise JsonLdError(
-                        'Invalid JSON-LD syntax; @direction value must be '
-                        'null, "ltr", or "rtl".',
-                        'jsonld.SyntaxError',
-                        {'context': ctx}, code='invalid base direction')
+                    raise JsonLdSyntaxError(
+                        '@direction value must be null, "ltr", or "rtl".',
+                        context=ctx, code='invalid base direction')
                 else:
                     rval['@direction'] = value
                 defined['@direction'] = True
@@ -3001,16 +2943,13 @@ class JsonLdProcessor(object):
             if '@propagate' in ctx:
                 value = ctx['@propagate']
                 if rval['processingMode'] == 'json-ld-1.0':
-                    raise JsonLdError(
-                        'Invalid JSON-LD syntax; @propagate not compatible with '
-                        'json-ld-1.0',
-                        'jsonld.SyntaxError', {'context': ctx},
-                        code='invalid context entry')
+                    raise JsonLdSyntaxError(
+                        '@propagate not compatible with json-ld-1.0',
+                        context=ctx, code='invalid context entry')
                 if type(value) != bool:
-                    raise JsonLdError(
-                        'Invalid JSON-LD syntax; @propagate value must be a boolean.',
-                        'jsonld.SyntaxError', {'context': ctx},
-                        code='invalid @propagate value')
+                    raise JsonLdSyntaxError(
+                        '@propagate value must be a boolean.',
+                        context=ctx, code='invalid @propagate value')
                 defined['@propagate'] = True
 
             # handle @protected; determine whether this sub-context is declaring
@@ -3047,11 +2986,10 @@ class JsonLdProcessor(object):
                                 override_protected=True,
                                 cycles=cycles)
                         except Exception as e:
-                            raise JsonLdError(
-                                'Invalid JSON-LD syntax; invalid scoped context.',
-                                'jsonld.SyntaxError', {'context': key_ctx, 'term': k},
-                                code='invalid scoped context',
-                                cause=e)
+                            raise JsonLdSyntaxError(
+                                'invalid scoped context.',
+                                context=key_ctx, term=k,
+                                code='invalid scoped context', cause=e)
 
             # cache processed result and give the context a unique identifier
             rval = freeze(rval)
@@ -3087,11 +3025,10 @@ class JsonLdProcessor(object):
         :param nest_property: a term in the active context or `@nest`
         """
         if self._expand_iri(active_ctx, nest_property, vocab=True) != '@nest':
-            raise JsonLdError(
+            raise JsonLdSyntaxError(
                 'JSON-LD compact error; nested property must have an @nest '
                 'value resolving to @nest.',
-                'jsonld.SyntaxError', {'context': active_ctx},
-                code='invalid @nest value')
+                context=active_ctx, code='invalid @nest value')
 
     def _expand_language_map(self, active_ctx, language_map, direction):
         """
@@ -3111,11 +3048,9 @@ class JsonLdProcessor(object):
                 if item is None:
                     continue
                 if not _is_string(item):
-                    raise JsonLdError(
-                        'Invalid JSON-LD syntax; language map values must be '
-                        'strings.', 'jsonld.SyntaxError',
-                        {'languageMap': language_map},
-                        code='invalid language map value')
+                    raise JsonLdSyntaxError(
+                        'language map values must be strings.',
+                        languageMap=language_map, code='invalid language map value')
                 val = {'@value': item}
                 if expanded_key != '@none':
                     val['@language'] = key.lower()
@@ -3193,11 +3128,9 @@ class JsonLdProcessor(object):
                         '@language' not in index_key and
                         '@type' not in index_key and
                         '@index' not in index_key):
-                    raise JsonLdError(
-                        'Invalid JSON-LD syntax; Attempt to add illegal key to value '
-                        'object: ' + index_key + '.',
-                        'jsonld.SyntaxError',
-                        {'value': item}, code='invalid value object')
+                    raise JsonLdSyntaxError(
+                        f'Attempt to add illegal key to value object: {index_key}.',
+                        value=item, code='invalid value object')
                 elif property_index:
                     # index is a property to be expanded,
                     # and values interpreted for that property
@@ -3485,7 +3418,7 @@ class JsonLdProcessor(object):
                 except Exception as e:
                     raise InvalidJsonLiteral(
                         'JSON literal could not be parsed.',
-                        {"value": rval['@value']},
+                        value=rval['@value'],
                         code='invalid JSON literal',
                         cause=e)
 
@@ -3633,10 +3566,9 @@ class JsonLdProcessor(object):
                 if property == '@index' and '@index' in node \
                     and (input_['@index'] != node['@index'] or
                          input_['@index']['@id'] != node['@index']['@id']):
-                    raise JsonLdError(
-                        'Invalid JSON-LD syntax; conflicting @index property '
-                        ' detected.', 'jsonld.SyntaxError',
-                        {'node': node}, code='conflicting indexes')
+                    raise JsonLdSyntaxError(
+                        'conflicting @index property detected.',
+                        node=node, code='conflicting indexes')
                 node[property] = input_[property]
                 continue
 
@@ -3747,11 +3679,8 @@ class JsonLdProcessor(object):
             link[id_] = output
 
             if (flags['embed'] == '@first' or flags['embed'] == '@last') and state['options']['is11']:
-                raise JsonLdError(
-                    'Invalid JSON-LD syntax; invalid value of @embed.',
-                    'jsonld.SyntaxError',
-                    {'frame': frame},
-                    code='invalid @embed value')
+                raise JsonLdSyntaxError('invalid value of @embed.',
+                                        frame=frame, code='invalid @embed value')
 
             # skip adding this node object to the top level, as it was
             # already included in another node object
@@ -3975,11 +3904,9 @@ class JsonLdProcessor(object):
                 rval = '@never'
             elif (rval != '@always' and rval != '@never' and rval != '@link' and
                   rval != '@first' and rval != '@last' and rval != '@once'):
-                raise JsonLdError(
-                    'Invalid JSON-LD syntax; invalid value of @embed',
-                    'jsonld.SyntaxError',
-                    {'frame': frame, 'embed': rval},
-                    code='invalid @embed value')
+                raise JsonLdSyntaxError(
+                    'invalid value of @embed',
+                    frame=frame, embed=rval, code='invalid @embed value')
         return rval
 
     def _validate_frame(self, frame):
@@ -3991,31 +3918,22 @@ class JsonLdProcessor(object):
         """
         if (not _is_array(frame) or len(frame) != 1 or
                 not _is_object(frame[0])):
-            raise JsonLdError(
-                'Invalid JSON-LD syntax; a JSON-LD frame must be a single '
-                'object.', 'jsonld.SyntaxError',
-                {'frame': frame},
-                code='invalid frame')
+            raise JsonLdSyntaxError('a JSON-LD frame must be a single object.',
+                                    frame=frame, code='invalid frame')
         if '@id' in frame[0]:
             for id_ in JsonLdProcessor.arrayify(frame[0]['@id']):
                 # @id must be wildcard or IRI
                 if (not (_is_object(id_) or _is_absolute_iri(id_)) or
                         (_is_string(id_) and id_.startswith('_:'))):
-                    raise JsonLdError(
-                        'Invalid JSON-LD syntax; invalid @id in frame.',
-                        'jsonld.SyntaxError',
-                        {'frame': frame},
-                        code='invalid frame')
+                    raise JsonLdSyntaxError('invalid @id in frame.',
+                                            frame=frame, code='invalid frame')
         if '@type' in frame[0]:
             for type_ in JsonLdProcessor.arrayify(frame[0]['@type']):
                 # @id must be wildcard or IRI
                 if (not (_is_object(type_) or _is_absolute_iri(type_)) or
                         (_is_string(type_) and type_.startswith('_:'))):
-                    raise JsonLdError(
-                        'Invalid JSON-LD syntax; invalid @type in frame.',
-                        'jsonld.SyntaxError',
-                        {'frame': frame},
-                        code='invalid frame')
+                    raise JsonLdSyntaxError('invalid @type in frame.',
+                                            frame=frame, code='invalid frame')
 
     def _filter_subjects(self, state, subjects, frame, flags):
         """
@@ -4621,10 +4539,9 @@ class JsonLdProcessor(object):
         # signal an error
         for term, definition in active_ctx['mappings'].items():
             if definition and definition['_prefix'] and iri.startswith(term + ':'):
-                raise JsonLdError(
+                raise JsonLdSyntaxError(
                     'Absolute IRI confused with prefix.',
-                    'jsonld.SyntaxError',
-                    {'iri': iri, 'term': term, 'context': active_ctx},
+                    iri=iri, term=term, context=active_ctx,
                     code='IRI confused with prefix')
 
         # compact IRI relative to base
@@ -4765,10 +4682,9 @@ class JsonLdProcessor(object):
             if defined[term]:
                 return
             # cycle detected
-            raise CyclicalContext(
-                'Cyclical context definition detected.',
-                {'context': local_ctx, 'term': term},
-                code='cyclic IRI mapping')
+            raise CyclicalContext('Cyclical context definition detected.',
+                                  context=local_ctx, term=term,
+                                  code='cyclic IRI mapping')
 
         # now defining term
         defined[term] = False
@@ -4782,26 +4698,21 @@ class JsonLdProcessor(object):
             self._processing_mode(active_ctx, 1.1)):
             if (not value or
                 any(v not in ['@container', '@id', '@protected'] for v in value.keys())):
-                raise JsonLdError(
-                    'Invalid JSON-LD syntax; keywords cannot be overridden.',
-                    'jsonld.SyntaxError', {'context': local_ctx, 'term': term},
-                    code='keyword redefinition')
+                raise JsonLdSyntaxError(
+                    'keywords cannot be overridden.',
+                    context=local_ctx, term=term, code='keyword redefinition')
         elif _is_keyword(term):
-            raise JsonLdError(
-                'Invalid JSON-LD syntax; keywords cannot be overridden.',
-                'jsonld.SyntaxError', {'context': local_ctx, 'term': term},
-                code='keyword redefinition')
+            raise JsonLdSyntaxError(
+                'keywords cannot be overridden.',
+                context=local_ctx, term=term, code='keyword redefinition')
         elif KEYWORD.match(term):
-            warnings.warn(
-                'terms beginning with "@" are reserved'
-                ' for future use and ignored',
-                SyntaxWarning)
+            warnings.warn('terms beginning with "@" are reserved '
+                          'for future use and ignored',
+                          SyntaxWarning)
             return
         elif term == '':
-            raise JsonLdError(
-                'Invalid JSON-LD syntax; a term cannot be an empty string.',
-                'jsonld.SyntaxError', {'context': local_ctx},
-                code='invalid term definition')
+            raise JsonLdSyntaxError('a term cannot be an empty string.',
+                                    context=local_ctx, code='invalid term definition')
 
         # remove old mapping
         if term in active_ctx['mappings']:
@@ -4820,10 +4731,9 @@ class JsonLdProcessor(object):
             value = {'@id': value}
 
         if not _is_object(value):
-            raise JsonLdError(
-                'Invalid JSON-LD syntax; @context property values must be '
-                'strings or objects.', 'jsonld.SyntaxError',
-                {'context': local_ctx}, code='invalid term definition')
+            raise JsonLdSyntaxError(
+                '@context property values must be strings or objects.',
+                context=local_ctx, code='invalid term definition')
 
         # create new mapping
         mapping = {'reverse': False, 'protected': False, '_prefix': False}
@@ -4834,10 +4744,9 @@ class JsonLdProcessor(object):
             valid_keys.extend(['@context', '@direction', '@index', '@nest', '@prefix', '@protected'])
         for kw in value:
             if kw not in valid_keys:
-                raise JsonLdError(
-                    'Invalid JSON-LD syntax; a term definition must not contain ' + kw,
-                    'jsonld.SyntaxError',
-                    {'context': local_ctx}, code='invalid term definition')
+                raise JsonLdSyntaxError(
+                    f'a term definition must not contain {kw}',
+                    context=local_ctx, code='invalid term definition')
 
         # always compute whether term has a colon as an optimization for _compact_iri
         colon = term.find(':')
@@ -4845,27 +4754,24 @@ class JsonLdProcessor(object):
 
         if '@reverse' in value:
             if '@id' in value:
-                raise JsonLdError(
-                    'Invalid JSON-LD syntax; an @reverse term definition must '
-                    'not contain @id.', 'jsonld.SyntaxError',
-                    {'context': local_ctx}, code='invalid reverse property')
+                raise JsonLdSyntaxError(
+                    'an @reverse term definition must not contain @id.',
+                    context=local_ctx, code='invalid reverse property')
             if '@nest' in value:
-                raise JsonLdError(
-                    'Invalid JSON-LD syntax; an @reverse term definition must '
-                    'not contain @nest.', 'jsonld.SyntaxError',
-                    {'context': local_ctx}, code='invalid reverse property')
+                raise JsonLdSyntaxError(
+                    'an @reverse term definition must not contain @nest.',
+                    context=local_ctx, code='invalid reverse property')
             reverse = value['@reverse']
             if not _is_string(reverse):
-                raise JsonLdError(
-                    'Invalid JSON-LD syntax; @context @reverse value must be '
-                    'a string.', 'jsonld.SyntaxError',
-                    {'context': local_ctx, 'iri': reverse},
+                raise JsonLdSyntaxError(
+                    '@context @reverse value must be a string.',
+                    context=local_ctx, iri=reverse,
                     code='invalid IRI mapping')
 
             if KEYWORD.match(reverse):
-                warnings.warn('values beginning with "@" are reserved'
-                    'for future use and ignored',
-                    SyntaxWarning)
+                warnings.warn('values beginning with "@" are reserved '
+                              'for future use and ignored',
+                              SyntaxWarning)
 
                 if previous_mapping:
                     active_ctx['mappings'][term] = previous_mapping
@@ -4879,30 +4785,26 @@ class JsonLdProcessor(object):
                 active_ctx, reverse, vocab=True,
                 local_ctx=local_ctx, defined=defined)
             if not _is_absolute_iri(id_):
-                raise JsonLdError(
-                    'Invalid JSON-LD syntax; @context @reverse value must be '
+                raise JsonLdSyntaxError(
+                    '@context @reverse value must be '
                     'an absolute IRI or a blank node identifier.',
-                    'jsonld.SyntaxError',
-                    {'context': local_ctx, 'iri': id_},
-                    code='invalid IRI mapping')
+                    context=local_ctx, iri=id_, code='invalid IRI mapping')
 
             mapping['@id'] = id_
             mapping['reverse'] = True
         elif '@id' in value:
             id_ = value['@id']
             if id_ and not _is_string(id_):
-                raise JsonLdError(
-                    'Invalid JSON-LD syntax; @context @id value must be a '
-                    'string.', 'jsonld.SyntaxError',
-                    {'context': local_ctx, 'iri': id_},
-                    code='invalid IRI mapping')
+                raise JsonLdSyntaxError(
+                    '@context @id value must be a string.',
+                    context=local_ctx, iri=id_, code='invalid IRI mapping')
 
             if id_ is None:
                 mapping['@id'] = None
             elif not _is_keyword(id_) and KEYWORD.match(id_):
                 warnings.warn('values beginning with "@" are reserved'
-                    'for future use and ignored',
-                    SyntaxWarning)
+                              'for future use and ignored',
+                              SyntaxWarning)
 
                 if previous_mapping:
                     active_ctx['mappings'][term] = previous_mapping
@@ -4916,12 +4818,10 @@ class JsonLdProcessor(object):
                     active_ctx, id_, vocab=True,
                     local_ctx=local_ctx, defined=defined)
                 if not _is_absolute_iri(id_) and not _is_keyword(id_):
-                    raise JsonLdError(
-                        'Invalid JSON-LD syntax; @context @id value must be '
-                        'an absolute IRI, a blank node identifier, or a '
-                        'keyword.', 'jsonld.SyntaxError',
-                        {'context': local_ctx, 'iri': id_},
-                        code='invalid IRI mapping')
+                    raise JsonLdSyntaxError(
+                        '@context @id value must be an absolute IRI, '
+                        'a blank node identifier, or a keyword.',
+                        context=local_ctx, iri=id_, code='invalid IRI mapping')
 
                 # if term has the form of an IRI it must map the same
                 if re.match(r'.*((:[^:])|/)', term):
@@ -4931,12 +4831,9 @@ class JsonLdProcessor(object):
                         active_ctx, term, vocab=True,
                         local_ctx=local_ctx, defined=updated_defined)
                     if term_iri != id_:
-                        raise JsonLdError(
-                            'Invalid JSON-LD syntax; term in form of IRI must '
-                            'expand to definition.',
-                            'jsonld.SyntaxError',
-                            {'context': local_ctx, 'iri': id_},
-                            code='invalid IRI mapping')
+                        raise JsonLdSyntaxError(
+                            'term in form of IRI must expand to definition.',
+                            context=local_ctx, iri=id_, code='invalid IRI mapping')
 
                 mapping['@id'] = id_
                 mapping['_prefix'] = (
@@ -4965,12 +4862,9 @@ class JsonLdProcessor(object):
             else:
                 # non-IRIs MUST define @ids if @vocab not available
                 if '@vocab' not in active_ctx:
-                    raise JsonLdError(
-                        'Invalid JSON-LD syntax; @context terms must define '
-                        'an @id.', 'jsonld.SyntaxError', {
-                            'context': local_ctx,
-                            'term': term
-                        }, code='invalid IRI mapping')
+                    raise JsonLdSyntaxError(
+                        '@context terms must define an @id.',
+                        context=local_ctx, term=term, code='invalid IRI mapping')
                 # prepend vocab to term
                 mapping['@id'] = active_ctx['@vocab'] + term
 
@@ -4981,33 +4875,29 @@ class JsonLdProcessor(object):
         if '@type' in value:
             type_ = value['@type']
             if not _is_string(type_):
-                raise JsonLdError(
-                    'Invalid JSON-LD syntax; @context @type value must be '
-                    'a string.', 'jsonld.SyntaxError',
-                    {'context': local_ctx}, code='invalid type mapping')
+                raise JsonLdSyntaxError(
+                    '@context @type value must be a string.',
+                    context=local_ctx, code='invalid type mapping')
             if type_ == '@json' or type_ == '@none':
                 if self._processing_mode(active_ctx, 1.0):
-                    raise JsonLdError(
-                        'Invalid JSON-LD syntax; an @context @type value must not be ' +
-                        type_ +
-                        ' in JSON-LD 1.0 mode.', 'jsonld.SyntaxError',
-                        {'context': local_ctx}, code='invalid type mapping')
+                    raise JsonLdSyntaxError(
+                        f'an @context @type value must not be {type_} '
+                        'in JSON-LD 1.0 mode.',
+                        context=local_ctx, code='invalid type mapping')
             elif type_ != '@id' and type_ != '@vocab':
                 # expand @type to full IRI
                 type_ = self._expand_iri(
                     active_ctx, type_, vocab=True,
                     local_ctx=local_ctx, defined=defined)
                 if not _is_absolute_iri(type_):
-                    raise JsonLdError(
-                        'Invalid JSON-LD syntax; an @context @type value must '
-                        'be an absolute IRI.', 'jsonld.SyntaxError',
-                        {'context': local_ctx}, code='invalid type mapping')
+                    raise JsonLdSyntaxError(
+                        'an @context @type value must be an absolute IRI.',
+                        context=local_ctx, code='invalid type mapping')
                 if type_.startswith('_:'):
-                    raise JsonLdError(
-                        'Invalid JSON-LD syntax; an @context @type values '
+                    raise JsonLdSyntaxError(
+                        'an @context @type values '
                         'must be an IRI, not a blank node identifier.',
-                        'jsonld.SyntaxError', {'context': local_ctx},
-                        code='invalid type mapping')
+                        context=local_ctx, code='invalid type mapping')
             # add @type to mapping
             mapping['@type'] = type_
 
@@ -5023,18 +4913,16 @@ class JsonLdProcessor(object):
                 # check container length
                 if '@list' in container:
                     if len(container) != 1:
-                        raise JsonLdError(
-                            'Invalid JSON-LD syntax; @context @container with @list must have no other values.',
-                            'jsonld.SyntaxError',
-                            {'context': local_ctx}, code='invalid container mapping')
+                        raise JsonLdSyntaxError(
+                            '@context @container with @list must have no other values.',
+                            context=local_ctx, code='invalid container mapping')
                 elif '@graph' in container:
                     _extra_keys = [kw for kw in container if kw not in ['@graph', '@id', '@index', '@set']]
                     if _extra_keys:
-                        raise JsonLdError(
-                            'Invalid JSON-LD syntax; @context @container with @graph must have no other values ' +
+                        raise JsonLdSyntaxError(
+                            '@context @container with @graph must have no other values '
                             'other than @id, @index, and @set',
-                            'jsonld.SyntaxError',
-                            {'context': local_ctx}, code='invalid container mapping')
+                            context=local_ctx, code='invalid container mapping')
                 else:
                     is_valid = is_valid and (len(container) <= (2 if has_set else 1))
 
@@ -5044,11 +4932,9 @@ class JsonLdProcessor(object):
                         mapping['@type'] = '@id'
 
                     if mapping['@type'] != '@id' and mapping['@type'] != '@vocab':
-                        raise JsonLdError(
-                            'Invalid JSON-LD syntax; container: @type requires @type to be '
-                            '@id or @vocab.',
-                            'jsonld.SyntaxError',
-                            {'context': local_ctx}, code='invalid type mapping')
+                        raise JsonLdSyntaxError(
+                            'container: @type requires @type to be @id or @vocab.',
+                            context=local_ctx, code='invalid type mapping')
             else: # json-ld-1.0
                 is_valid = is_valid and _is_string(value['@container'])
 
@@ -5059,43 +4945,31 @@ class JsonLdProcessor(object):
             is_valid = is_valid and not (has_set and '@list' in container)
 
             if not is_valid:
-                raise JsonLdError(
-                    'Invalid JSON-LD syntax; @context @container value '
+                raise JsonLdSyntaxError(
+                    '@context @container value '
                     'must be one of the following: ' + ', '.join(valid_containers) + '.',
-                    'jsonld.SyntaxError',
-                    {'context': local_ctx}, code='invalid container mapping')
+                    context=local_ctx, code='invalid container mapping')
             _extra_reverse_keys = [kw for kw in container if kw not in ['@index', '@set']]
             if (mapping['reverse'] and _extra_reverse_keys):
-                raise JsonLdError(
-                    'Invalid JSON-LD syntax; @context @container value for '
+                raise JsonLdSyntaxError(
+                    '@context @container value for '
                     'an @reverse type definition must be @index or @set.',
-                    'jsonld.SyntaxError', {'context': local_ctx},
-                    code='invalid reverse property')
+                    context=local_ctx, code='invalid reverse property')
 
             # add @container to mapping
             mapping['@container'] = container
 
         if '@index' in value:
             if not '@container' in value or not '@index' in mapping['@container']:
-                raise JsonLdError(
-                    'Invalid JSON-LD syntax; @index without @index in @container.',
-                    'jsonld.SyntaxError',
-                    {
-                        'context': local_ctx,
-                        'term': term,
-                        'index': value['@index']
-                    },
+                raise JsonLdSyntaxError(
+                    '@index without @index in @container.',
+                    context=local_ctx, term=term, index=value['@index'],
                     code='invalid term definition')
 
             if not _is_string(value['@index']) or value['@index'].find('@') == 0:
-                raise JsonLdError(
-                    'Invalid JSON-LD syntax; @index must expand to an IRI.',
-                    'jsonld.SyntaxError',
-                    {
-                        'context': local_ctx,
-                        'term': term,
-                        'index': value['@index']
-                    },
+                raise JsonLdSyntaxError(
+                    '@index must expand to an IRI.',
+                    context=local_ctx, term=term, index=value['@index'],
                     code='invalid term definition')
             mapping['@index'] = value['@index']
 
@@ -5107,10 +4981,9 @@ class JsonLdProcessor(object):
         if '@language' in value and '@type' not in value:
             language = value['@language']
             if not (language is None or _is_string(language)):
-                raise JsonLdError(
-                    'Invalid JSON-LD syntax; @context @language value must be '
-                    'a string or null.', 'jsonld.SyntaxError',
-                    {'context': local_ctx}, code='invalid language mapping')
+                raise JsonLdSyntaxError(
+                    '@context @language value must be a string or null.',
+                    context=local_ctx, code='invalid language mapping')
             # add @language to mapping
             if language is not None:
                 language = language.lower()
@@ -5119,50 +4992,44 @@ class JsonLdProcessor(object):
         # term may be used as prefix
         if '@prefix' in value:
             if re.match(r'.*(:|/)', term):
-                raise JsonLdError(
-                    'Invalid JSON-LD syntax; @context @prefix used on a compact IRI term.',
-                    'jsonld.SyntaxError',
-                    {'context': local_ctx}, code='invalid term definition')
+                raise JsonLdSyntaxError(
+                    '@context @prefix used on a compact IRI term.',
+                    context=local_ctx, code='invalid term definition')
             if _is_keyword(mapping['@id']):
-                raise JsonLdError(
-                    'Invalid JSON-LD syntax; @keywords may not be used as prefixes.',
-                    'jsonld.SyntaxError',
-                    {'context': local_ctx}, code='invalid term definition')
+                raise JsonLdSyntaxError(
+                    '@keywords may not be used as prefixes.',
+                    context=local_ctx, code='invalid term definition')
             if not _is_bool(value['@prefix']):
-                raise JsonLdError(
-                    'Invalid JSON-LD syntax; @context value for @prefix must be boolean.',
-                    'jsonld.SyntaxError',
-                    {'context': local_ctx}, code='invalid @prefix value')
+                raise JsonLdSyntaxError(
+                    '@context value for @prefix must be boolean.',
+                    context=local_ctx, code='invalid @prefix value')
             mapping['_prefix'] = value['@prefix']
 
         # direction
         if '@direction' in value:
             direction = value['@direction']
             if direction and direction != 'ltr' and direction != 'rtl':
-                raise JsonLdError(
-                    'Invalid JSON-LD syntax; @direction value must be null, "ltr", or "rtl".',
-                    'jsonld.SyntaxError',
-                    {'context': local_ctx}, code='invalid base direction')
+                raise JsonLdSyntaxError(
+                    '@direction value must be null, "ltr", or "rtl".',
+                    context=local_ctx, code='invalid base direction')
             mapping['@direction'] = direction
 
         # nesting
         if '@nest' in value:
             nest = value['@nest']
             if not _is_string(nest) or (nest != '@nest' and nest[0] == '@'):
-                raise JsonLdError(
-                    'Invalid JSON-LD syntax; @context @nest value must be ' +
+                raise JsonLdSyntaxError(
+                    '@context @nest value must be '
                     'a string which is not a keyword other than @nest.',
-                    'jsonld.SyntaxError',
-                    {'context': local_ctx}, code='invalid @nest value')
+                    context=local_ctx, code='invalid @nest value')
             mapping['@nest'] = nest
 
         # disallow aliasing @context and @preserve
         id_ = mapping['@id']
         if id_ == '@context' or id_ == '@preserve':
-            raise JsonLdError(
-                'Invalid JSON-LD syntax; @context and @preserve '
-                'cannot be aliased.', 'jsonld.SyntaxError',
-                {'context': local_ctx}, code='invalid keyword alias')
+            raise JsonLdSyntaxError(
+                '@context and @preserve cannot be aliased.',
+                context=local_ctx, code='invalid keyword alias')
 
         if (previous_mapping and
             previous_mapping['protected'] and
@@ -5171,10 +5038,9 @@ class JsonLdProcessor(object):
             mapping['protected'] = True
 
             if previous_mapping != mapping:
-                raise JsonLdError(
-                    'Invalid JSON-LD syntax; tried to redefine a protected term.',
-                    'jsonld.SyntaxError',
-                    {'context': local_ctx}, code='protected term redefinition')
+                raise JsonLdSyntaxError(
+                    'tried to redefine a protected term.',
+                    context=local_ctx, code='protected term redefinition')
 
         # IRI mapping now defined
         active_ctx['mappings'][term] = mapping
@@ -5774,7 +5640,7 @@ class URDNA2015(object):
                     path += issuer_copy.get_id(related)
 
                     # 5.4.5.3) Append <, the hash in result, and > to path.
-                    path += '<' + result['hash'] + '>'
+                    path += f'<{result["hash"]}>'
 
                     # 5.4.5.4) Set issuer copy to the identifier issuer in
                     # result.
@@ -6068,10 +5934,9 @@ def _validate_type_value(v, is_frame):
                 all(_is_string(vv) for vv in v['@default'])):
             return
 
-    raise JsonLdError(
-        'Invalid JSON-LD syntax; "@type" value must be a string, an array '
-        'of strings, or an empty object.',
-        'jsonld.SyntaxError', {'value': v}, code='invalid type value')
+    raise JsonLdSyntaxError('"@type" value must be a string, an array '
+                            'of strings, or an empty object.',
+                            value=v, code='invalid type value')
 
 
 def _is_bool(v):
@@ -6279,14 +6144,12 @@ def load_document(url,
 
     :return: True if the value is an absolute IRI, False if not.
     """
-    headers = {
-        'Accept': 'application/ld+json, application/json;q=0.5'
-    }
+    headers = {'Accept': 'application/ld+json, application/json;q=0.5'}
     # FIXME: only if html5lib loaded?
     headers['Accept'] = headers['Accept'] + ', text/html;q=0.8, application/xhtml+xml;q=0.8'
 
     if requestProfile:
-        headers['Accept'] = ('application/ld+json;profile=%s, ' % requestProfile) + headers['Accept']
+        headers['Accept'] = f'application/ld+json;profile={requestProfile}, ' + headers['Accept']
 
     # FIXME: add text/html and application/xhtml+xml, if appropriate
 
@@ -6315,13 +6178,13 @@ def load_document(url,
             else:
                 # parse JSON
                 remote_doc['document'] = json.loads(remote_doc['document'])
-        except JsonLdError as cause:
-            raise cause
-        except Exception as cause:
+        except JsonLdError:
+            raise
+        except Exception as e:
             raise LoadDocumentError(
                 'Could not retrieve a JSON-LD document from the URL.',
-                {'remoteDoc': remote_doc}, code='loading document failed',
-                cause=cause)
+                remoteDoc=remote_doc, code='loading document failed',
+                cause=e)
 
     return remote_doc
 
@@ -6357,28 +6220,25 @@ def load_html(input, url, profile, options):
     if url_elements.fragment:
         # FIXME: CGI decode
         id = url_elements.fragment
-        element = document.xpath('//script[@id="%s"]' % id)
+        element = document.xpath(f'//script[@id="{id}"]')
         if not element:
-            raise LoadDocumentError(
-                'No script tag found for id.',
-                {'id': id}, code='loading document failed')
+            raise LoadDocumentError('No script tag found for id.',
+                                    id=id, code='loading document failed')
         types = element[0].xpath('@type')
         if not types or not types[0].startswith('application/ld+json'):
-            raise LoadDocumentError(
-                'Wrong type for script tag.',
-                {'type': types}, code='loading document failed')
+            raise LoadDocumentError('Wrong type for script tag.',
+                                    type=types, code='loading document failed')
         content = element[0].text
         try:
             return json.loads(content)
-        except Exception as cause:
-            raise JsonLdError(
+        except Exception as e:
+            raise JsonLdSyntaxError(
                 'Invalid JSON syntax.',
-                'jsonld.SyntaxError',
-                {'content': content}, code='invalid script element', cause=cause)
+                content=content, code='invalid script element', cause=e)
 
     elements = []
     if profile:
-        elements = document.xpath('//script[starts-with(@type, "application/ld+json;profile=%s")]' % profile)
+        elements = document.xpath(f'//script[starts-with(@type, "application/ld+json;profile={profile}")]')
     if not elements:
         elements = document.xpath('//script[starts-with(@type, "application/ld+json")]')
     if options.get('extractAllScripts'):
@@ -6391,23 +6251,20 @@ def load_html(input, url, profile, options):
                 else:
                     result.append(js)
             except Exception as cause:
-                raise JsonLdError(
+                raise JsonLdSyntaxError(
                     'Invalid JSON syntax.',
-                    'jsonld.SyntaxError',
-                    {'content': element.text}, code='invalid script element', cause=cause)
+                    content=element.text, code='invalid script element', cause=cause)
         return result
     elif elements:
         try:
             return json.loads(elements[0].text)
         except Exception as cause:
-            raise JsonLdError(
+            raise JsonLdSyntaxError(
                 'Invalid JSON syntax.',
-                'jsonld.SyntaxError',
-                {'content': elements[0].text}, code='invalid script element', cause=cause)
+                content=elements[0].text, code='invalid script element', cause=cause)
     else:
-        raise LoadDocumentError(
-            'No script tag found.',
-            {'type': type}, code='loading document failed')
+        raise LoadDocumentError('No script tag found.',
+                                type=types, code='loading document failed')
 
 # Registered global RDF parsers hashed by content-type.
 _rdf_parsers = {}
