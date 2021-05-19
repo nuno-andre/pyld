@@ -14,3 +14,7 @@ docs/_build
 profiler
 tests/test_caching.py
 tests/data/test_caching.json
+.mypy_cache/
+json-ld-api/
+json-ld-framing/
+normalization/
