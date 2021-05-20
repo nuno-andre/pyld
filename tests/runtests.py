@@ -22,10 +22,6 @@ from unittest import TextTestResult
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', 'src'))
 from pyld import jsonld, parse  # noqa: E402
 
-
-__copyright__ = 'Copyright (c) 2011-2013 Digital Bazaar, Inc.'
-__license__ = 'New BSD license'
-
 ROOT_MANIFEST_DIR = None
 SKIP_TESTS = []
 ONLY_IDENTIFIER = None

@@ -39,17 +39,13 @@ def unparse_url(parsed):
     elif isinstance(parsed, (list, tuple)):
         parsed = ParsedUrl(*parsed)
 
-    rval = ''
-    if parsed.scheme:
-        rval += f'{parsed.scheme}:'
-    if parsed.authority is not None:
-        rval += f'//{parsed.authority}'
-    rval += parsed.path
-    if parsed.query is not None:
-        rval += f'?{parsed.query}'
-    if parsed.fragment is not None:
-        rval += f'#{parsed.fragment}'
-    return rval
+    return ''.join((
+        f'{parsed.scheme}:' if parsed.scheme else '',
+        f'//{parsed.authority}' if parsed.authority is not None else '',
+        parsed.path,
+        f'?{parsed.query}' if parsed.query is not None else '',
+        f'#{parsed.fragment}' if parsed.fragment is not None else '',
+    ))
 # endregion
 
 
@@ -142,8 +138,11 @@ def _nquads_functions():
 
 _quad, _empty, _eoln = _nquads_functions()
 
+ESCAPED = str.maketrans(
+    {'\\':  r'\\', '\t':  r'\t', '\n':  r'\n', '\r':  r'\r', '"': r'\"'})
 
-def _compare_rdf_triples(t1, t2):
+
+def _compare_rdf_triples(t1, t2) -> bool:
     """
     Compares two RDF triples for equality.
 
@@ -153,7 +152,7 @@ def _compare_rdf_triples(t1, t2):
     :return: True if the triples are the same, False if not.
     """
     for attr in ['subject', 'predicate', 'object']:
-        if(t1[attr]['type'] != t2[attr]['type'] or
+        if (t1[attr]['type'] != t2[attr]['type'] or
                 t1[attr]['value'] != t2[attr]['value']):
             return False
 
@@ -183,35 +182,34 @@ def parse_nquads(input_):
 
         # parse quad
         try:
-            match = _quad(line).groups()
+            s1, s2, p, o1, o2, o3, o4, o5, n1, n2 = _quad(line).groups()
         except AttributeError:
             raise ParseError('Error while parsing N-Quads invalid quad.', line=i)
 
         # get subject
-        if match[0] is not None:
-            subject = {'type': 'IRI', 'value': match[0]}
+        if s1 is not None:
+            subject = {'type': 'IRI', 'value': s1}
         else:
-            subject = {'type': 'blank node', 'value': match[1]}
+            subject = {'type': 'blank node', 'value': s2}
 
         # get object
-        if match[3] is not None:
-            object_ = {'type': 'IRI', 'value': match[3]}
-        elif match[4] is not None:
-            object_ = {'type': 'blank node', 'value': match[4]}
+        if o1 is not None:
+            object_ = {'type': 'IRI', 'value': o1}
+        elif o2 is not None:
+            object_ = {'type': 'blank node', 'value': o2}
         else:
             object_ = {'type': 'literal'}
-            unescaped = (
-                match[5]
-                .replace(r'\"', '"')
-                .replace(r'\t', '\t')
-                .replace(r'\n', '\n')
-                .replace(r'\r', '\r')
-                .replace(r'\\', '\\'))
-            if match[6] is not None:
-                object_['datatype'] = match[6]
-            elif match[7] is not None:
+            unescaped = (o3
+                         .replace(r'\"', '"')
+                         .replace(r'\t', '\t')
+                         .replace(r'\n', '\n')
+                         .replace(r'\r', '\r')
+                         .replace(r'\\', '\\'))
+            if o4 is not None:
+                object_['datatype'] = o4
+            elif o5 is not None:
                 object_['datatype'] = RDF_LANGSTRING
-                object_['language'] = match[7]
+                object_['language'] = o5
             else:
                 object_['datatype'] = XSD_STRING
             object_['value'] = unescaped
@@ -220,16 +218,11 @@ def parse_nquads(input_):
         triple = {
             'subject': subject,
             'object': object_,
-            'predicate': {'type': 'IRI', 'value': match[2]},
+            'predicate': {'type': 'IRI', 'value': p},
         }
 
         # get graph name ('@default' is used for the default graph)
-        if match[8] is not None:
-            name = match[8]
-        elif match[9] is not None:
-            name = match[9]
-        else:
-            name = '@default'
+        name = n1 if n1 is not None else n2 if n2 is not None else '@default'
 
         # initialize graph in dataset
         if name not in dataset:
@@ -246,4 +239,68 @@ def parse_nquads(input_):
                 triples.append(triple)
 
     return dataset
+
+
+def to_nquad(triple, graph_name=None):
+    """
+    Converts an RDF triple and graph name to an N-Quad string (a single
+    quad).
+
+    :param triple: the RDF triple or quad to convert (a triple or quad
+        may be passed, if a triple is passed then `graph_name` should be
+        given to specify the name of the graph the triple is in, `None`
+        for the default graph).
+    :param graph_name: the name of the graph containing the triple, None
+        for the default graph.
+
+    :return: the N-Quad string.
+    """
+    s = triple['subject']
+    p = triple['predicate']
+    o = triple['object']
+    g = triple.get('name', {'value': graph_name})['value']
+
+    # is subject an IRI?
+    quad = f'<{s["value"]}> ' if s['type'] == 'IRI' else f'{s["value"]} '
+
+    # is property an IRI?
+    quad += f'<{p["value"]}> ' if p['type'] == 'IRI' else f'{p["value"]} '
+
+    # object is IRI, bnode, or literal
+    if o['type'] == 'IRI':
+        quad += f'<{o["value"]}>'
+    elif(o['type'] == 'blank node'):
+        quad += o['value']
+    else:
+        escaped = o['value'].translate(ESCAPED)
+        quad += f'"{escaped}"'
+        if o['datatype'] == RDF_LANGSTRING:
+            if o['language']:
+                quad += f'@{o["language"]}'
+        elif o['datatype'] != XSD_STRING:
+            quad += f'^^<{o["datatype"]}>'
+
+    # graph
+    if g is not None:
+        quad += f' <{g}>' if g[0:2] != '_:' else f' {g}'
+
+    return quad + ' .\n'
+
+
+def to_nquads(dataset):
+    """
+    Converts an RDF dataset to N-Quads.
+
+    :param dataset: the RDF dataset to convert.
+
+    :return: the N-Quads string.
+    """
+    quads = []
+    for graph_name, triples in dataset.items():
+        for triple in triples:
+            if graph_name == '@default':
+                graph_name = None
+            quads.append(to_nquad(triple, graph_name))
+    quads.sort()
+    return ''.join(quads)
 # endregion

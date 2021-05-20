@@ -10,20 +10,22 @@ Remote document loader.
 .. moduleauthor:: Olaf Conradi <olaf@conradi.org>
 .. moduleauthor:: Nuno André <mail@nunoand.re>
 """
-from typing import Any, Optional, Callable
 from urllib.parse import urlparse
 import string
 import re
 
-from httpx import AsyncClient, Response, get as httpx_get
+try:
+    from httpx import AsyncClient, get as http_get
+except ImportError:
+    from requests import get as http_get
+    # TODO: aiohttp failover
+    AsyncClient = None
 
 from .exceptions import JsonLdError, InvalidUrl, LoadDocumentError
 from .jsonld import prepend_base
 from .const import LINK_HEADER_REL
 from .parse import parse_link_header
 
-
-Loader = Callable[[str, dict[str, Any]], dict[str, Any]]
 
 __all__ = ['sync_document_loader', 'async_document_loader']
 
@@ -32,27 +34,27 @@ VALID_CHARS = set(string.ascii_letters + string.digits + '-.:')
 BASE_HEADERS = {'Accept': 'application/ld+json, application/json'}
 
 
-def validate_url(url: str, secure: bool = False) -> None:
-    pieces = urlparse(url)
+def validate_url(url, secure=False):
+    parts = urlparse(url)
 
     if (
-        not all([pieces.scheme, pieces.netloc])
-        or pieces.scheme not in ['http', 'https']
-        or set(pieces.netloc) > VALID_CHARS
+        not parts.scheme and parts.netloc
+        or parts.scheme not in ['http', 'https']
+        or set(parts.netloc) > VALID_CHARS
     ):
         raise InvalidUrl(
             'URL could not be dereferenced; only "http" and "https" '
             'URLs are supported.',
             url=url, code='loading document failed')
 
-    if secure and pieces.scheme != 'https':
+    if secure and parts.scheme != 'https':
         raise InvalidUrl(
             'URL could not be dereferenced; secure mode enabled and '
             'the URL\'s scheme is not "https".',
             url=url, code='loading document failed')
 
 
-def parse_response(response: Response, url: str) -> dict[str, Any]:
+def parse_response(response, url):
     content_type = response.headers.get('content-type') or 'application/octet-stream'
 
     doc = dict(contentType=content_type,
@@ -85,7 +87,7 @@ def parse_response(response: Response, url: str) -> dict[str, Any]:
     return doc
 
 
-def sync_document_loader(secure: bool = False, **kwargs) -> Loader:
+def sync_document_loader(secure=False, **kwargs):
     """
     Create a synchronous document loader.
 
@@ -97,7 +99,7 @@ def sync_document_loader(secure: bool = False, **kwargs) -> Loader:
 
     :return: the RemoteDocument loader function.
     """
-    def loader(url: str, options=None):
+    def loader(url, options=None):
         """
         Retrieves JSON-LD at the given URL.
 
@@ -109,7 +111,7 @@ def sync_document_loader(secure: bool = False, **kwargs) -> Loader:
             validate_url(url, secure=secure)
             options = options or {}
             headers = options.get('headers', BASE_HEADERS)
-            response = httpx_get(url, headers=headers, **kwargs)
+            response = http_get(url, headers=headers, **kwargs)
 
             return parse_response(response, url)
 
@@ -118,13 +120,12 @@ def sync_document_loader(secure: bool = False, **kwargs) -> Loader:
         except Exception as e:
             raise LoadDocumentError(
                 'Could not retrieve a JSON-LD document from the URL.',
-                code='loading document failed',
-                cause=e)
+                code='loading document failed', cause=e)
 
     return loader
 
 
-def async_document_loader(loop=None, secure: bool = False, **kwargs) -> Loader:
+def async_document_loader(loop=None, secure=False, **kwargs):
     """
     Create an asynchronous document loader.
 
@@ -139,8 +140,7 @@ def async_document_loader(loop=None, secure: bool = False, **kwargs) -> Loader:
     if loop is None:
         loop = asyncio.get_event_loop()
 
-    async def async_loader(
-            url: str, headers: dict[str, str]) -> dict[str, Any]:
+    async def async_loader(url, headers):
         """
         Retrieves JSON-LD at the given URL asynchronously.
 
@@ -164,7 +164,7 @@ def async_document_loader(loop=None, secure: bool = False, **kwargs) -> Loader:
                 code='loading document failed',
                 cause=e)
 
-    def loader(url: str, options: Optional[dict[str, str]] = None):
+    def loader(url, options=None):
         """
         Retrieves JSON-LD at the given URL.
 
@@ -172,8 +172,7 @@ def async_document_loader(loop=None, secure: bool = False, **kwargs) -> Loader:
 
         :return: the RemoteDocument.
         """
-        return loop.run_until_complete(
-            async_loader(url, (options or {}).get('headers', BASE_HEADERS))
-        )
+        headers = (options or {}).get('headers', BASE_HEADERS)
+        return loop.run_until_complete(async_loader(url, headers=headers))
 
     return loader

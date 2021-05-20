@@ -6,7 +6,7 @@ __license__ = 'New BSD license'
 __version__ = '2.1.0-dev'
 
 
-def get_intenv(var: str, default: int) -> int:
+def get_intenv(var, default):
     try:
         return int(getenv(f'PYLD_{var}', default))
     except ValueError:
@@ -26,17 +26,17 @@ XSD_STRING = 'http://www.w3.org/2001/XMLSchema#string'
 
 # RDF constants
 RDF = 'http://www.w3.org/1999/02/22-rdf-syntax-ns#'
-RDF_LIST = RDF + 'List'
-RDF_FIRST = RDF + 'first'
-RDF_REST = RDF + 'rest'
-RDF_NIL = RDF + 'nil'
-RDF_TYPE = RDF + 'type'
-RDF_LANGSTRING = RDF + 'langString'
-RDF_JSON_LITERAL = RDF + 'JSON'
+RDF_LIST = f'{RDF}List'
+RDF_FIRST = f'{RDF}first'
+RDF_REST = f'{RDF}rest'
+RDF_NIL = f'{RDF}nil'
+RDF_TYPE = f'{RDF}type'
+RDF_LANGSTRING = f'{RDF}langString'
+RDF_JSON_LITERAL = f'{RDF}JSON'
 
 # JSON-LD Namespace
 JSON_LD_NS = 'http://www.w3.org/ns/json-ld#'
-LINK_HEADER_REL = JSON_LD_NS + 'context'
+LINK_HEADER_REL = f'{JSON_LD_NS}context'
 
 
 def get_jsonld_version():
@@ -47,7 +47,7 @@ def get_jsonld_version():
 
 
 JSONLD_VERSION = get_jsonld_version()
-KEYWORDS = set((
+KEYWORDS = frozenset((
     # JSON-LD keywords
     '@base',
     '@container',

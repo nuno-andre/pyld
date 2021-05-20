@@ -8,7 +8,7 @@ Context Resolver for managing remote contexts.
 .. moduleauthor:: Gregg Kellogg <gregg@greggkellogg.net>
 """
 from cachetools import LRUCache
-from c14n.Canonicalize import canonicalize
+from .c14n import canonicalize
 from .types import Mapping
 from .exceptions import JsonLdSyntaxError, ContextUrlError, InvalidUrl
 from .const import MAX_CONTEXT_URLS, MAX_ACTIVE_CONTEXTS
@@ -48,9 +48,6 @@ class ContextResolver:
     Resolves and caches remote contexts.
     """
     def __init__(self, shared_cache, document_loader):
-        """
-        Creates a ContextResolver.
-        """
         # processor-specific RDF parsers
         self.per_op_cache = {}
         self.shared_cache = shared_cache

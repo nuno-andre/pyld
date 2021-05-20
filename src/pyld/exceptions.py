@@ -1,4 +1,3 @@
-from typing import Optional
 import traceback
 import sys
 
@@ -7,13 +6,7 @@ class JsonLdError(Exception):
     """
     Base class for JSON-LD errors.
     """
-    def __init__(
-        self,
-        message: str,
-        code: Optional[str] = None,
-        cause: Optional[Exception] = None,
-        **kwargs,
-    ):
+    def __init__(self, message: str, code=None, cause=None, **kwargs):
         super().__init__(self, message)
         self.details = kwargs
         self.code = code
